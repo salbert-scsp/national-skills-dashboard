@@ -44,7 +44,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
 
+import auth
 import backlog as backlog_store
+import run_state
 from dashboardtables import build_review_rows, load_dashboard
 from json_store import (
     STATUS_APPROVED,
@@ -81,6 +83,10 @@ async def lifespan(app: FastAPI):
 
     A missing store is normal on a fresh checkout and says so; a corrupt one is
     CRITICAL, because with no database there is no second copy to fall back to.
+
+    Also settles two things that a restart would otherwise leave lying: a run record
+    still claiming to be running (nothing is, so it is marked interrupted), and the
+    configuration mistakes worth complaining about once rather than on discovery.
     """
     try:
         master = load_master()
@@ -92,6 +98,17 @@ async def lifespan(app: FastAPI):
             )
     except Exception:
         logger.critical("The JSON store could not be read.", exc_info=True)
+
+    # In-memory run state does not survive a restart, so a record still saying
+    # "running" means the server died mid-run. Nothing is lost -- the backlog holds
+    # every occupation that had not completed -- but the panel must not claim a run is
+    # in progress when no thread exists to do it.
+    try:
+        run_state.reconcile_on_startup()
+    except Exception:
+        logger.exception("Could not reconcile the ingestion run state at startup.")
+
+    auth.startup_warnings(os.getenv("HOST", "127.0.0.1"))
     yield
 
 
@@ -104,6 +121,32 @@ app = FastAPI(
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    """
+    Gates every route except the public dashboard and its assets.
+
+    A GET redirects to the login form carrying where it was headed; a POST answers 401
+    rather than redirecting, because a form post that silently becomes a login page
+    looks to the caller like the action succeeded.
+
+    Registered as middleware rather than a per-route dependency on purpose: a
+    dependency has to be remembered on every new route, and the one that gets forgotten
+    is the one that mutates the store.
+    """
+    if auth.is_public(request.url.path):
+        return await call_next(request)
+
+    if auth.valid(request.cookies.get(auth.COOKIE_NAME)):
+        return await call_next(request)
+
+    if request.method != "GET":
+        return JSONResponse({"ok": False, "code": "auth"}, status_code=401)
+
+    target = quote(auth.safe_next(request.url.path))
+    return RedirectResponse(url=f"/login?next={target}", status_code=303)
 
 PAGE_SIZE = 25
 
@@ -159,6 +202,12 @@ REMEDIATION_ERRORS = {
 }
 
 GENERIC_REMEDIATION_ERROR = "The reference page could not be used."
+
+# Login failures, looked up in a fixed table like every other reflected code here, so a
+# hand-edited ?err= cannot put chosen text on the page.
+LOGIN_ERRORS = {
+    "bad_password": "That password is not right.",
+}
 
 # Every code scraping can produce must have a sentence here. A missing one would
 # silently degrade to the generic message, which is a worse reviewer experience than a
@@ -512,6 +561,60 @@ def render_dashboard(request: Request):
         "dashboard.html",
         {"data": data, "payload": _embed_json(data)},
     )
+
+
+@app.get("/login", response_class=HTMLResponse)
+def render_login(request: Request, next: str = "/", err: str = None):
+    """
+    The password form.
+
+    `next` is sanitized on the way in AND again on the way out of the POST, so a
+    hand-edited link cannot turn this page into an open redirect.
+    """
+    return templates.TemplateResponse(
+        request,
+        "login.html",
+        {
+            "next": auth.safe_next(next),
+            "error": LOGIN_ERRORS.get(err) if err else None,
+            "configured": auth.configured(),
+        },
+        status_code=401 if err else 200,
+    )
+
+
+@app.post("/login")
+def handle_login(password: str = Form(""), next: str = Form("/")):
+    """Checks the password and sets the session cookie."""
+    target = auth.safe_next(next)
+
+    if not auth.check_password(password):
+        # The reason is not distinguished for the user: "wrong password" and "no
+        # password configured on the server" look identical from outside, and only one
+        # of them is worth telling an anonymous caller about. The server log says which.
+        logger.warning("Failed login attempt.")
+        return RedirectResponse(
+            url=f"/login?next={quote(target)}&err=bad_password", status_code=303
+        )
+
+    response = RedirectResponse(url=target, status_code=303)
+    response.set_cookie(
+        auth.COOKIE_NAME,
+        auth.issue(),
+        max_age=auth.MAX_AGE,
+        httponly=True,       # not readable from JavaScript
+        samesite="lax",      # still sent on the top-level navigations the forms use
+        path="/",
+    )
+    logger.info("Login succeeded.")
+    return response
+
+
+@app.post("/logout")
+def handle_logout():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(auth.COOKIE_NAME, path="/")
+    return response
 
 
 # Skill names arrive as path segments. They can contain slashes ("SAS/CONNECT"), plus

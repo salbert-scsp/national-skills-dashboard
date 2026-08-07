@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Skills Analytics - Sign in</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>AI Skills Analytics <span>Sign in</span></h1>
+        <div class="spacer"></div>
+        <nav class="chips">
+            <a class="chip" href="/dashboard">Dashboard</a>
+        </nav>
+    </header>
+
+    <div class="wrap">
+        <section class="card" style="max-width: 460px; margin: 48px auto;">
+            <div class="card__head">
+                <h3>Review queue</h3>
+            </div>
+
+            {% if not configured %}
+                <div class="notice notice--error">
+                    <strong>No password is configured on this server.</strong>
+                    Every review page is locked until <span class="mono">ADMIN_PASSWORD</span>
+                    is set in <span class="mono">.env</span>. The dashboard is unaffected.
+                </div>
+            {% elif error %}
+                <div class="notice notice--error">{{ error }}</div>
+            {% endif %}
+
+            <p class="muted" style="margin: 0 0 16px;">
+                The review queue and the admin controls need the shared password. The
+                <a href="/dashboard">dashboard</a> is open to everyone and needs nothing.
+            </p>
+
+            <form action="/login" method="POST">
+                <!--
+                    `next` round-trips so a bookmarked deep link lands where it meant to
+                    after signing in. Sanitized on both legs: it must be a single-slash
+                    path, or this form would be an open redirect.
+                -->
+                <input type="hidden" name="next" value="{{ next }}">
+                <div class="field" style="margin-bottom: 12px;">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password"
+                           autocomplete="current-password" autofocus required />
+                </div>
+                <button type="submit" class="primary" style="width: 100%;">Sign in</button>
+            </form>
+        </section>
+    </div>
+</body>
+</html>
