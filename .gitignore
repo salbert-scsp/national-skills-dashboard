@@ -1,0 +1,69 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Spare Gemini API keys used for daily-quota rotation. Live secrets, one per line of
+# JSON. The .example file is the template and is safe to track.
+gemini_keys.json
+!gemini_keys.example.json
+
+# Which keys are spent today. Holds sha256 fingerprints rather than keys, so it is not
+# a second copy of the secrets, but it is machine-local state with no business in git.
+gemini_key_state.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Local caches and computed artifacts.
+# Both cache names are listed on purpose: the code defaults to
+# wikipedia_skills_cache.json but .env overrides CACHE_FILE to the multisource name,
+# so ignoring only the default would leave the cache actually in use untracked.
+wikipedia_skills_cache.json
+multisource_skills_cache.json
+computed_dashboard_skills.json
+multisource_computed_dashboard.json
+AI_skills_dashboard_mini.json
+*.db
+*.sqlite3
+.cache/
+
+# Database dumps written by purge_superseded.py. These hold the full text of every
+# deleted queue row, so they stay local.
+superseded_queue_backup_*.json
+
+# Migration dry-run output.
+skills_master.json.new
+skills_timeseries.json.new
+
+# Work owed from an interrupted or quota-stopped run. Machine-local.
+ingestion_backlog.json
+
+# Live state of a web-triggered scrape: how far it got, whether it was paused, when it
+# hit the quota wall. Machine-local, same as the backlog it reports on.
+ingestion_run_state.json
+
+# The ONNX models, 173 MB between them. Deliberately untracked: they are immutable
+# binary assets that no commit here will ever change, and tracking them would make
+# every clone and every checkout carry 173 MB for no version history worth having.
+# They are NOT reproducible from this repo -- keep a copy somewhere else. tokenizer.json
+# is only 700 KB and IS tracked, because the two must stay in step and it is small.
+*.onnx
+
+# The local JSON store IS the database now. Left tracked deliberately -- committing
+# it is the only version history these files get. Uncomment to stop tracking them.
+# skills_master.json
+# skills_timeseries.json
+dashboard_export.json
+
+# Logs
+*.log
+
+# OS and editor
+.DS_Store
+.idea/

@@ -1,0 +1,35 @@
+# SkillDashboard runtime dependencies.
+# Pinned to the versions verified working under Python 3.11.
+# The system default python3 (3.9.6) does NOT satisfy this file; use python3.11.
+#
+#   python3.11 -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+# UI layer
+streamlit==1.60.0
+plotly==6.9.0
+pandas==3.0.5
+
+# Offline inference
+numpy==2.4.6
+onnxruntime==1.27.0
+tokenizers==0.23.1
+
+# LLM audit layer
+google-genai==2.16.0
+pydantic==2.13.4
+
+# Scraping and configuration
+requests==2.34.2
+python-dotenv==1.2.2
+
+# --- Retired, kept installable -------------------------------------------------
+# The pipeline now stores everything in skills_master.json and skills_timeseries.json,
+# so none of the below is imported by the running system. They are still required by
+# unused/fastapi_main.py, database.py, score.py and migrate_sql_to_json.py, which stay
+# on disk so the SQL path remains available and the migration can be re-run.
+fastapi==0.141.1
+uvicorn==0.52.0
+Jinja2==3.1.6
+python-multipart==0.0.32   # FastAPI Form() parsing in the old review endpoints
+pyodbc==5.3.0              # requires the ODBC Driver 18 for SQL Server system package

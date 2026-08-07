@@ -1,0 +1,1038 @@
+/* Vendored typeface.
+ *
+ * --font names "Outfit" first with a system fallback chain behind it. These rules are
+ * what make that first name mean anything: without an @font-face the browser looks for
+ * a locally installed Outfit, finds none, and falls straight through to system-ui.
+ *
+ * The files are NOT in the repository yet. A missing src fails silently and the
+ * fallback chain keeps the page readable, so these rules are harmless now and
+ * self-activating the moment the four woff2 files land in static/fonts/. See
+ * static/fonts/README.md for the exact filenames expected.
+ *
+ * No CDN link on purpose. The scoring models run offline from local ONNX files and the
+ * pipeline makes no Hugging Face calls; pulling a font off a third-party host at page
+ * load would contradict that posture for a cosmetic gain.
+ *
+ * font-display: swap renders in the fallback immediately and swaps when the font
+ * arrives, which avoids invisible text on a cold load.
+ *
+ * The stylesheet also uses weights 550, 650 and 680. Those are synthesized from the
+ * nearest declared weight below.
+ */
+@font-face {
+  font-family: "Outfit";
+  src: url("/static/fonts/Outfit-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/static/fonts/Outfit-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/static/fonts/Outfit-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/static/fonts/Outfit-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Shared tokens and components for both views.
+ *
+ * Colour roles come from a validated palette. Notes on the two deliberate
+ * choices here:
+ *
+ * 1. Events are NOT colour-coded by tag. There are 12 tags, well past the 8
+ *    categorical slots a palette can safely distinguish, so hue would be a lie.
+ *    Tags render as neutral chips, and the two hues in play are split by JOB,
+ *    not by category, which is why no legend is needed:
+ *      red  (--brand)  = the data itself + brand rules — timeline marks, year
+ *                        meters, the current year, the selected event
+ *      navy (--accent) = things you operate — buttons, chips, focus rings, links
+ *    Red is therefore decorative/structural here and never status. Status still
+ *    lives in --good/--warning/--critical, and every status pairs a glyph with a
+ *    word (see the CVD note below), so a red rule is never mistaken for an error.
+ *
+ * 2. date_precision is encoded by SHAPE + TEXT, never colour: a solid square
+ *    marker and an exact date for `day`, an open marker plus a hatched span bar
+ *    and an explicit precision label for everything else.
+ *
+ * The diff colours (added/removed) sit at CVD ΔE 4.1 for deuteranopia — red and
+ * green are indistinguishable for a large minority of readers. Every diff row
+ * therefore carries a ± glyph and a "was:"/"now:" label, so colour is only ever
+ * reinforcement.
+ */
+
+/* Supplied brand palette — 9 values, 8 distinct (#ffffff appears twice):
+     #b31942  red          #851432  dark red
+     #0a3161  blue         #00334e  navy
+     #f0f0f0  near-white   #ccd5de  blue-grey
+     #7b7b7b  mid grey     #ffffff  white
+   Measured contrast for every pairing used below is recorded in the comments.
+   Three values are DERIVED, because 8 colours cannot fill ~20 UI roles:
+     --critical-wash  #f7e8ec = 10% #b31942 over white  (a tint of the red)
+     dark --surface-page #002437 = 30% black over #00334e (a shade of the navy);
+       needed because #00334e and #0a3161 sit 1.03:1 apart and cannot read as
+       two distinct surfaces
+     --border/--border-strong  rgba() of #00334e, as the previous scheme did
+   --good and --warning are deliberately NOT remapped: the palette contains no
+   green or amber, and those two roles carry the review view's diff add/remove
+   and merge-conflict semantics, where a red "added" row would be unreadable. */
+:root {
+  color-scheme: light;
+
+  --surface-1: #ffffff;
+  --surface-page: #f0f0f0;
+  --surface-sunken: #ccd5de;
+  --text-primary: #00334e;      /* 13.3:1 on white, 11.6:1 on page */
+  --text-secondary: #0a3161;    /* 12.9:1 on white, 11.3:1 on page */
+  --text-muted: #7b7b7b;        /* 4.2:1 on white, 3.7:1 on page — see note */
+  --gridline: #ccd5de;
+  --baseline: #7b7b7b;
+  --border: rgba(0, 51, 78, 0.14);
+  --border-strong: rgba(0, 51, 78, 0.32);
+
+  /* Brand red, the palette's #b31942/#851432 pair, kept as its own role so the
+     decorative red and the critical red can diverge in dark mode (they must —
+     see below) without every rule and mark inheriting error semantics.
+       --brand      marks, rules, meter fills — non-text, needs ≥3:1
+       --brand-ink  red used AS text — needs ≥4.5:1
+       --brand-wash a 10% tint of the red, same value as --critical-wash */
+  --brand: #b31942;             /* 6.7:1 on white, 5.9:1 on the page, 4.5:1 on the meter track */
+  --brand-ink: #851432;         /* 9.8:1 on white, 8.6:1 on the page */
+  --brand-wash: #f7e8ec;
+
+  --accent: #0a3161;            /* 12.9:1 on white as a mark */
+  --accent-quiet: #ccd5de;
+  /* Ink that sits ON an accent fill. Must flip with the mode: the light accent
+     is dark navy (white ink, 12.9:1) but the dark accent is pale blue-grey, where
+     white ink would be 1.6:1 — so it becomes navy ink (8.9:1). */
+  --accent-ink: #ffffff;
+
+  --good: #0ca30c;
+  --good-text: #006300;
+  --good-wash: #e8f6e8;
+  --warning: #fab219;
+  --warning-text: #7a5300;
+  --warning-wash: #fdf3dd;
+  --critical: #b31942;
+  --critical-text: #851432;     /* 8.3:1 on the wash below */
+  --critical-wash: #f7e8ec;
+
+  /* Chart categories — the three AI-proximity classes. These are CATEGORICAL, not a
+     magnitude ramp: "not AI" is inert, not merely low, which is why it is the
+     achromatic slot rather than a pale tint of the others.
+
+     --cat-ai is derived, not from the 8 supplied values: #0a3161 sits at OKLCH L
+     0.317 against the 0.43–0.77 band charts need, and lightening it drops chroma to
+     0.067, below the 0.10 floor, so it would read grey. #1a5cb8 is the same hue
+     (258° vs 256°, i.e. the same blue) re-stepped into the band at L 0.489 / C 0.160.
+     --cat-enabling and --cat-nonai are --brand and --text-muted unchanged.
+
+     Measured (OKLab ΔE×100, Machado 2009 at severity 1.0): the chromatic pair
+     separates at 19.6 under protanopia and 29.2 under normal vision — both well past
+     the 8.0 CVD target and the 15.0 normal-vision floor. Grey↔red is 9.3, also past
+     target. Grey's chroma is 0.000 and so fails the categorical chroma floor by
+     construction: that check exists to catch a hue that ACCIDENTALLY reads grey, and
+     here grey is the meaning. Do not "fix" it into a fourth hue. Every category also
+     carries a text label and a count, so colour is never the only channel. */
+  --cat-ai: #1a5cb8;            /* 6.4:1 on white */
+  --cat-enabling: #b31942;      /* = --brand, 6.7:1 on white */
+  --cat-nonai: #7b7b7b;         /* = --text-muted, 4.2:1 on white */
+
+  --radius: 8px;
+  --radius-sm: 4px;
+  --gap: 16px;
+  --font: "Outfit", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Dark mode is SELECTED from the same palette, not an automatic flip. Three
+   things the palette can't do in dark, and how each is resolved:
+     - no dark neutral: the page uses the derived #002437 shade of the navy
+     - #b31942 as TEXT on a dark surface is 2.4:1 (unreadable), so the error role
+       inverts to a solid red fill with white text at 6.7:1
+     - #b31942 as a MARK on the navy card is 2.0:1, so it fails even the 3:1 bar
+       for non-text. The palette holds no light red, so two DERIVED tints carry
+       the brand role in dark: #d1758e (40% white over the red) and #d98ca0
+       (50%). Both are the same hue — only the mode changes, not the meaning. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #00334e;
+    --surface-page: #002437;
+    --surface-sunken: #0a3161;
+    --text-primary: #ffffff;      /* 13.3:1 on the navy card */
+    --text-secondary: #ccd5de;    /* 8.9:1 on the navy card */
+    --text-muted: #7b7b7b;        /* 3.1:1 on the navy card — see note */
+    --gridline: rgba(204, 213, 222, 0.22);
+    --baseline: #7b7b7b;
+    --border: rgba(204, 213, 222, 0.16);
+    --border-strong: rgba(204, 213, 222, 0.34);
+    --accent: #ccd5de;            /* 8.9:1 on the navy card as a mark */
+    --accent-quiet: #0a3161;
+    --accent-ink: #00334e;         /* 8.9:1 on the pale accent fill */
+    --brand: #d1758e;             /* 4.2:1 on the card, 5.1:1 on the page, 4.1:1 on the meter track */
+    --brand-ink: #d98ca0;         /* 5.2:1 as text on the navy card */
+    --brand-wash: rgba(179, 25, 66, 0.30);
+    --good-text: #0ca30c;
+    --good-wash: #122712;
+    --warning-text: #fab219;
+    --warning-wash: #2e2410;
+    --critical: #b31942;
+    --critical-text: #ffffff;
+    --critical-wash: rgba(179, 25, 66, 0.30);   /* white ink on it: 11.5:1 */
+
+    /* Chart categories, re-stepped for the navy card rather than flipped.
+       Worst CVD pair 11.3, worst normal-vision pair 15.1 — all three clear target.
+
+       The neutral is LIGHTER here than the --text-muted grey used in light mode, and
+       that is load-bearing rather than cosmetic. Protanopia collapses the red channel,
+       so the dark red #c96b85 desaturates toward grey and separation has to come from
+       LIGHTNESS instead of hue. Against #7b7b7b the measured CVD ΔE was 1.6 — a
+       protanope could not tell "AI Enabling" from "Not AI Skill" at all. #a8b2ba opens
+       the lightness gap and takes that pair to 11.3.
+
+       It sits above the 0.48–0.67 dark lightness band on purpose: that band keeps
+       competing HUES legible, and the achromatic slot is not competing for hue
+       identity. An out-of-band neutral at 11.3 separation beats an in-band one at 1.6. */
+    --cat-ai: #5a93de;          /* 4.2:1 on the navy card */
+    --cat-enabling: #c96b85;    /* 3.7:1 on the navy card */
+    --cat-nonai: #a8b2ba;       /* 6.2:1 on the navy card */
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #00334e;
+  --surface-page: #002437;
+  --surface-sunken: #0a3161;
+  --text-primary: #ffffff;
+  --text-secondary: #ccd5de;
+  --text-muted: #7b7b7b;
+  --gridline: rgba(204, 213, 222, 0.22);
+  --baseline: #7b7b7b;
+  --border: rgba(204, 213, 222, 0.16);
+  --border-strong: rgba(204, 213, 222, 0.34);
+  --accent: #ccd5de;
+  --accent-quiet: #0a3161;
+  --accent-ink: #00334e;
+  --brand: #d1758e;
+  --brand-ink: #d98ca0;
+  --brand-wash: rgba(179, 25, 66, 0.30);
+  --good-text: #0ca30c;
+  --good-wash: #122712;
+  --warning-text: #fab219;
+  --warning-wash: #2e2410;
+  --critical: #b31942;
+  --critical-text: #ffffff;
+  --critical-wash: rgba(179, 25, 66, 0.30);
+
+  /* Keep in lockstep with the prefers-color-scheme block above, including the
+     lighter neutral — see the CVD note there before changing --cat-nonai. */
+  --cat-ai: #5a93de;
+  --cat-enabling: #c96b85;
+  --cat-nonai: #a8b2ba;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--text-primary);
+  background: var(--surface-page);
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); }
+a:hover { color: var(--brand-ink); }
+h1, h2, h3 { line-height: 1.25; margin: 0; font-weight: 650; }
+
+/* --- Layout ---------------------------------------------------------------- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--surface-1);
+  /* Brand rule. 2px so it reads as a deliberate edge rather than a hairline
+     border that happens to be red. */
+  border-bottom: 2px solid var(--brand);
+}
+.topbar h1 { font-size: 17px; }
+.topbar .spacer { flex: 1 1 auto; }
+.topbar__meta { color: var(--text-secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.wrap { max-width: 1180px; margin: 0 auto; padding: 20px; }
+
+.panel {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+/* --- Controls -------------------------------------------------------------- */
+
+.filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field > label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+input[type="text"], input[type="search"], input[type="date"], input[type="password"], select, textarea {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  min-height: 34px;
+}
+textarea { min-height: 64px; resize: vertical; width: 100%; }
+input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  min-height: 34px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--surface-sunken); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+button.danger { color: var(--critical-text); border-color: var(--critical); }
+button.danger:hover:not(:disabled) { background: var(--critical-wash); }
+button.ghost { border-color: transparent; background: transparent; }
+button.ghost:hover:not(:disabled) { background: var(--surface-sunken); }
+
+/* Tag filter chips. Selected state uses a filled accent + a check glyph, so
+   selection is never colour-alone. */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  min-height: 28px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.chip:hover { background: var(--surface-sunken); }
+.chip__count { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.chip[aria-pressed="true"] .chip__count { color: var(--accent-ink); opacity: 0.8; }
+.chip[aria-pressed="true"]::before { content: "✓"; font-weight: 700; }
+
+.tagline { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.tag--rc { border-style: dashed; }
+/* Marks an event whose span crosses a New Year. It is filed under its start
+   year, so this chip is what tells you the rest of the span exists. Pairs the
+   red wash with explicit "spans YYYY–YYYY" text — never colour alone. Drawn
+   from the BRAND red, not --critical: a span is a fact about the date, not a
+   problem. Identical to the old critical wash in light mode; in dark it takes
+   the pink ink (5.1:1 on the wash) instead of the error role's white. */
+.tag--span {
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--brand-wash);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+/* --- Year sections (accordion) --------------------------------------------- */
+/* One <details> per year, newest first. Native disclosure semantics carry the
+   keyboard and screen-reader behaviour, so there is no hand-rolled ARIA here.
+   The meter on each row is a one-series magnitude encoding — length only, single
+   flat accent, with the count printed beside it so the bar is reinforcement
+   rather than the sole channel. */
+
+.yearsec {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+}
+.yearsec[open] { border-color: var(--border-strong); }
+/* The current year is the one section open on first load. A red edge + red
+   numerals say "you are here" without a badge; the caret still carries
+   open/closed, so this is identity, not state. Doubled class so it outranks the
+   [open] rule above, and a real border rather than an inset shadow so the
+   summary's hover background can't paint over it. */
+.yearsec.yearsec--current {
+  border-left: 3px solid var(--brand);
+}
+.yearsec--current > summary .yearsec__label { color: var(--brand-ink); }
+
+.yearsec > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  cursor: pointer;
+  list-style: none;
+  border-radius: var(--radius);
+}
+.yearsec > summary::-webkit-details-marker { display: none; }
+.yearsec > summary:hover { background: var(--surface-sunken); }
+.yearsec > summary .spacer { flex: 1 1 auto; }
+.yearsec[open] > summary {
+  border-bottom: 1px solid var(--gridline);
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+/* Rotating caret: the open/closed state is a shape, not a colour. */
+.yearsec__caret {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-right: 2px solid var(--text-muted);
+  border-bottom: 2px solid var(--text-muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.yearsec[open] > summary .yearsec__caret { transform: rotate(45deg); }
+
+.yearsec__label {
+  flex: 0 0 auto;
+  font-size: 19px;
+  font-weight: 680;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  min-width: 3.4em;
+}
+.yearsec__themes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.yearsec__theme { display: inline-flex; gap: 6px; white-space: nowrap; }
+.yearsec__dot { color: var(--text-muted); }
+
+.yearsec__meter {
+  flex: 0 0 auto;
+  width: 84px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+.yearsec__fill {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: 0 3px 3px 0; /* rounded data-end, square at the origin */
+}
+.yearsec__count {
+  flex: 0 0 auto;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  min-width: 6.2em;
+  text-align: right;
+}
+
+/* A year with no matches under the current filter stays in place rather than
+   vanishing, so the list doesn't reshuffle while you type. */
+.yearsec--empty > summary { opacity: 0.55; }
+.yearsec--empty .yearsec__label { font-weight: 600; }
+
+.yearsec > .events { padding: 0 16px 6px; }
+.yearsec > .events > .event:first-child { border-top: 0; }
+
+/* Runs of years with no events at all, collapsed to a single inert row. */
+.yeargap {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 8px 0;
+  margin-bottom: 10px;
+  border-top: 1px dashed var(--gridline);
+  border-bottom: 1px dashed var(--gridline);
+}
+
+/* --- Timeline -------------------------------------------------------------- */
+
+.events { list-style: none; margin: 0; padding: 0; }
+
+.event {
+  display: grid;
+  grid-template-columns: 168px 1fr;
+  gap: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--gridline);
+  cursor: pointer;
+}
+.event:hover { background: var(--surface-page); }
+.event[aria-current="true"] {
+  background: var(--surface-page);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+/* Date rail: the precision encoding lives here. */
+.rail { display: flex; flex-direction: column; gap: 5px; padding-left: 10px; }
+.rail__date { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rail__precision {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* `day` — a solid mark and an exact date. */
+.mark { display: flex; align-items: center; gap: 0; height: 10px; }
+.mark__dot { width: 9px; height: 9px; background: var(--brand); border-radius: 2px; flex: 0 0 auto; }
+.mark__bar { height: 3px; background: var(--brand); border-radius: 2px; flex: 1 1 auto; }
+
+/* Non-`day` — hollow end caps and a hatched span, i.e. "the edges are soft".
+   Reads as approximate without relying on hue. */
+.event--imprecise .mark__dot {
+  background: transparent;
+  border: 2px solid var(--brand);
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+}
+.event--imprecise .mark__bar {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--brand) 0 2px,
+    transparent 2px 5px
+  );
+  height: 5px;
+  border-radius: 0;
+}
+.event--imprecise .rail__date { font-style: italic; font-weight: 550; }
+.event--undated .mark { opacity: 0.55; }
+
+.event__body { margin: 0; font-size: 14.5px; color: var(--text-primary); }
+.event__foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.event__sources { font-size: 12px; color: var(--text-muted); }
+
+/* --- Detail drawer --------------------------------------------------------- */
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 100%);
+  z-index: 60;
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.18);
+  overflow-y: auto;
+  padding: 20px;
+  transform: translateX(100%);
+  transition: transform 0.18s ease-out;
+}
+.drawer[data-open="true"] { transform: none; }
+.drawer__head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 4px; }
+.drawer__head h2 { font-size: 16px; flex: 1 1 auto; }
+.drawer dl { margin: 14px 0 0; display: grid; grid-template-columns: 128px 1fr; gap: 6px 12px; font-size: 13.5px; }
+.drawer dt { color: var(--text-muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+.drawer dd { margin: 0; }
+.drawer__body { font-size: 15px; margin: 12px 0 0; }
+.drawer__section {
+  margin-top: 18px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--brand-ink);
+}
+.drawer__quote {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--brand);
+  color: var(--text-secondary);
+}
+.drawer ul.sources { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.drawer ul.sources li { font-size: 13.5px; }
+
+/* Report control inside the drawer. Separated by a rule because it is the one thing here
+ * that writes to the database rather than describing the skill. */
+.drawer__report {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.drawer__report > .drawer__section { margin-top: 0; }
+.drawer__report .muted { font-size: 13px; margin: 4px 0 10px; }
+.drawer__reportform {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.drawer__reportform label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+.drawer__reportform button { margin-top: 4px; }
+.drawer__reportstatus { font-size: 13px; margin: 6px 0 0; min-height: 1.2em; }
+.drawer__reportstatus--ok { color: var(--good-text); }
+.drawer__reportstatus--bad { color: var(--critical-text); }
+
+/* Post-mortem edit results on the review queue. */
+.editcard { border-top: 1px solid var(--border); padding-top: 14px; margin-top: 14px; }
+.editcard:first-of-type { border-top: 0; padding-top: 0; margin-top: 0; }
+.editcard__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.editcard__name { font-weight: 650; font-size: 15px; }
+.editcard__meta { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s;
+}
+.scrim[data-open="true"] { opacity: 1; pointer-events: auto; }
+
+/* --- Badges ---------------------------------------------------------------- */
+/* Every status badge pairs a glyph with a word — colour never carries meaning
+   on its own (see the CVD note at the top of this file). */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 650;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.badge--new { color: var(--good-text); background: var(--good-wash); border-color: var(--good); }
+.badge--edit { color: var(--accent); background: var(--accent-quiet); border-color: var(--accent); }
+.badge--warn { color: var(--warning-text); background: var(--warning-wash); border-color: var(--warning); }
+.badge--danger { color: var(--critical-text); background: var(--critical-wash); border-color: var(--critical); }
+
+.mono { font-family: var(--mono); font-size: 12px; }
+.muted { color: var(--text-muted); }
+.empty { padding: 40px 20px; text-align: center; color: var(--text-muted); }
+.hidden { display: none !important; }
+
+/* --- Diff table (review view) --------------------------------------------- */
+
+.diff { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-top: 10px; }
+.diff th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--gridline);
+  font-weight: 600;
+}
+.diff td { padding: 7px 8px; vertical-align: top; border-bottom: 1px solid var(--gridline); }
+/* Field names hug their content; the value column absorbs all remaining width
+   so before/after rows sit directly beside the field they belong to. */
+.diff td.field { font-weight: 600; white-space: nowrap; width: 1%; }
+.diff th:last-child, .diff td:last-child { width: 99%; }
+.diff .val { display: block; }
+.diff .val__label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  margin-right: 6px;
+}
+.diff .before { background: var(--critical-wash); color: var(--critical-text); }
+.diff .before .val__label::before { content: "− "; }
+.diff .after { background: var(--good-wash); color: var(--good-text); }
+.diff .after .val__label::before { content: "+ "; }
+.diff .before del { text-decoration: line-through; opacity: 0.85; }
+.diff tr.conflict td { box-shadow: inset 3px 0 0 var(--warning); }
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card--conflict { border-color: var(--warning); border-left-width: 4px; }
+.card__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+.card__head h3 { font-size: 14px; }
+.card__actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--gridline); }
+
+.kv { display: grid; grid-template-columns: 140px 1fr; gap: 4px 12px; font-size: 13px; margin: 0; }
+.kv dt { color: var(--text-muted); font-weight: 600; }
+.kv dd { margin: 0; }
+
+.notice {
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 13.5px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-sunken);
+}
+.notice--warn { background: var(--warning-wash); border-color: var(--warning); color: var(--warning-text); }
+.notice--error { background: var(--critical-wash); border-color: var(--critical); color: var(--critical-text); }
+.notice--ok { background: var(--good-wash); border-color: var(--good); color: var(--good-text); }
+
+.stats { display: flex; flex-wrap: wrap; gap: 22px; }
+.stat__value { font-size: 24px; font-weight: 680; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.stat__label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }
+
+.editor { margin-top: 12px; padding: 12px; background: var(--surface-sunken); border-radius: var(--radius-sm); }
+.editor label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-secondary); font-weight: 600; margin: 8px 0 3px; }
+.editor input[type="text"], .editor textarea { width: 100%; }
+.editor__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; }
+
+@media (max-width: 720px) {
+  .event { grid-template-columns: 1fr; gap: 8px; }
+  .rail { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 10px; padding-left: 0; }
+  .mark { width: 56px; }
+  .drawer { width: 100%; }
+  .kv, .drawer dl { grid-template-columns: 1fr; }
+  /* The themes line is the first thing to go when the row runs out of width —
+     year, meter and count all carry more weight. */
+  .yearsec__themes { display: none; }
+  .yearsec__label { font-size: 17px; }
+  .yearsec > summary { padding: 12px; gap: 8px; }
+  .yearsec > .events { padding: 0 12px 4px; }
+}
+
+/* --- Review queue grid ----------------------------------------------------- */
+/* review.html has always referenced .cards-grid and .queue-section, but neither had a
+   rule, so every card fell back to a full-width block and the queue rendered as one
+   very long single column. auto-fill rather than auto-fit: an almost-empty queue should
+   keep its cards at a readable width instead of stretching one card across the page. */
+
+.queue-section { margin-top: 18px; }
+
+.cards-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  align-items: start;
+}
+/* .card carries a bottom margin for the stacked layout elsewhere; inside the grid the
+   gap already handles spacing. */
+.cards-grid > .card { margin-bottom: 0; }
+
+/* --- Dashboard: tabs ------------------------------------------------------- */
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  border-bottom: 1px solid var(--gridline);
+  margin-bottom: 18px;
+}
+.tab {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 9px 14px;
+  min-height: 38px;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+.tab:hover { background: var(--surface-sunken); }
+/* Selected tab is marked by a brand underline AND weight, never colour alone. */
+.tab[aria-selected="true"] {
+  color: var(--text-primary);
+  font-weight: 680;
+  border-bottom-color: var(--brand);
+}
+
+/* --- Dashboard: bar chart -------------------------------------------------- */
+/* One-series magnitude encoding: LENGTH carries the value, the fill is a single
+   flat brand red, and the number is printed beside the bar so the mark is
+   reinforcement rather than the sole channel. Category hue appears only in the
+   swatch beside the label — colouring the fill by category would double-encode a
+   variable that length already answers. */
+
+/* Bounded viewport for a list that grows without limit.
+ *
+ * The ranked list holds every scored skill, which is tens today and expected to be
+ * thousands. Rather than truncating -- which would hide data -- the box is capped and
+ * scrolls internally, so the panels below it stay reachable.
+ *
+ * Sized by row count so it stays legible if the row metrics change. --bar-row is the
+ * measured height of one row (content plus 6px vertical padding plus the 7px flex gap).
+ * The half row is deliberate: a row clipped at the fold is the affordance that tells a
+ * reader there is more below, which a boundary landing exactly on a gap does not.
+ *
+ * overscroll-behavior stops a scroll that reaches the bottom of the list from
+ * continuing on to scroll the page, which otherwise reads as the page jumping.
+ */
+.scrollbox {
+  --bar-row: 35px;
+  --bars-visible: 10.5;
+  max-height: calc(var(--bars-visible) * var(--bar-row));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room for the scrollbar so it never sits on top of a bar value. */
+  padding-right: 4px;
+}
+
+/* A caret-key user tabbing through bars must not have focus scrolled under the fold. */
+.scrollbox:focus-within { scroll-behavior: smooth; }
+
+.bars { display: flex; flex-direction: column; gap: 7px; margin: 0; padding: 0; list-style: none; }
+
+.bar {
+  display: grid;
+  grid-template-columns: minmax(120px, 210px) 1fr 3.6em;
+  gap: 12px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+.bar:hover { background: var(--surface-page); }
+.bar[aria-current="true"] { background: var(--surface-page); box-shadow: inset 3px 0 0 var(--brand); }
+
+.bar__label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  color: var(--text-primary);
+  min-width: 0;
+}
+.bar__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 9px so it matches .mark__dot, and square-ish so it is not mistaken for a radio. */
+.bar__swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: var(--cat-nonai);
+}
+.bar__swatch--ai { background: var(--cat-ai); }
+.bar__swatch--enabling { background: var(--cat-enabling); }
+.bar__swatch--nonai { background: var(--cat-nonai); }
+
+.bar__track {
+  position: relative;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+  min-width: 40px;
+}
+/* Square at the origin, rounded at the data end — the bar is anchored to a real
+   baseline, so only the value end gets a radius. */
+.bar__fill {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  border-radius: 0 4px 4px 0;
+  min-width: 2px;
+}
+.bar__value {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  text-align: right;
+}
+
+/* --- Dashboard: 100% stacked composition bar ------------------------------- */
+/* Part-to-whole for the three AI classes. A stacked bar rather than a pie: no arc
+   maths, no label collisions, and it stays readable at any width. The 2px surface
+   gap between segments is what keeps adjacent fills from reading as one block. */
+
+.stack {
+  display: flex;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-sunken);
+  gap: 2px;
+}
+.stack__seg { height: 100%; min-width: 0; }
+.stack__seg--ai { background: var(--cat-ai); }
+.stack__seg--enabling { background: var(--cat-enabling); }
+.stack__seg--nonai { background: var(--cat-nonai); }
+
+/* --- Dashboard: legend ---------------------------------------------------- */
+/* Always present: three series means identity must never rest on colour alone, so
+   each entry pairs its swatch with a name and a count. */
+
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; }
+.legend__item { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-secondary); }
+.legend__swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+.legend__swatch--ai { background: var(--cat-ai); }
+.legend__swatch--enabling { background: var(--cat-enabling); }
+.legend__swatch--nonai { background: var(--cat-nonai); }
+.legend__count { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+/* --- Dashboard: trend ----------------------------------------------------- */
+
+.trend { width: 100%; height: 220px; display: block; overflow: visible; }
+.trend__grid { stroke: var(--gridline); stroke-width: 1; }
+.trend__axis { stroke: var(--baseline); stroke-width: 1; }
+.trend__line { fill: none; stroke: var(--brand); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend__dot { fill: var(--brand); }
+.trend__tick { fill: var(--text-muted); font-size: 11px; font-family: var(--font); }
+
+/* --- Dashboard: table view ------------------------------------------------ */
+/* Every chart panel can switch to this. It is the screen-reader path and the
+   documented relief for any contrast WARN, so it is not optional chrome. */
+
+.dtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dtable caption { text-align: left; font-size: 12px; color: var(--text-muted); padding-bottom: 6px; }
+.dtable th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 600;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--gridline);
+  position: sticky;
+  top: 0;
+  background: var(--surface-1);
+}
+.dtable td { padding: 6px 8px; border-bottom: 1px solid var(--gridline); }
+.dtable td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dtable__wrap { max-height: 460px; overflow: auto; }
+
+/* --- Dashboard: tooltip --------------------------------------------------- */
+
+.tip {
+  position: fixed;
+  z-index: 70;
+  max-width: 300px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
+  font-size: 12.5px;
+  color: var(--text-primary);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.tip[data-open="true"] { opacity: 1; }
+.tip dl { margin: 4px 0 0; display: grid; grid-template-columns: auto auto; gap: 2px 10px; }
+.tip dt { color: var(--text-muted); }
+.tip dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+/* --- Dashboard: panel chrome --------------------------------------------- */
+
+.panel { margin-bottom: 14px; }
+.panel__head { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.panel__head h2 { font-size: 15px; }
+.panel__head .spacer { flex: 1 1 auto; }
+.panel__note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; }
+.panel__body { margin-top: 12px; }
+
+.prose { font-size: 14.5px; color: var(--text-primary); }
+.prose h3 { font-size: 14px; margin: 18px 0 6px; }
+.prose p, .prose li { color: var(--text-secondary); }
+.prose ul { margin: 6px 0; padding-left: 20px; }
+.prose code { font-family: var(--mono); font-size: 12.5px; background: var(--surface-sunken); padding: 1px 5px; border-radius: 3px; }
+.prose .formula { font-family: var(--mono); font-size: 13px; display: block; padding: 10px 12px; background: var(--surface-sunken); border-radius: var(--radius-sm); margin: 8px 0; }
+
+@media (max-width: 720px) {
+  .bar { grid-template-columns: 1fr 3.6em; gap: 6px 10px; }
+  .bar__label { grid-column: 1 / -1; }
+  .tab { padding: 8px 10px; }
+  .trend { height: 180px; }
+}
+
+/* The drawer slide is decorative; honour a reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  .drawer, .scrim, .tip, .yearsec__caret { transition: none; }
+}
+
+/* Forced-colors / high-contrast: hues are replaced by the OS, so restore the
+   category distinction with a border, which survives the substitution. */
+@media (forced-colors: active) {
+  .bar__swatch, .legend__swatch, .stack__seg { border: 1px solid currentColor; }
+  .bar__fill { background: currentColor; }
+}
+
+@media print {
+  .topbar, .filters, .drawer, .scrim { display: none !important; }
+  .tabs, .tip { display: none !important; }
+  /* Print every year, not just the ones left open on screen. */
+  .yearsec > summary { break-after: avoid; }
+  .yearsec:not([open]) > .events { display: block !important; }
+  .yearsec__caret, .yearsec__meter { display: none !important; }
+}

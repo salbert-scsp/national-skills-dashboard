@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Skills Analytics - Skill Scores</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>AI Skills Analytics <span>Skill Scores</span></h1>
+        <div class="spacer"></div>
+        <nav class="chips" aria-label="Views">
+            <a class="chip" href="/">Review queue</a>
+        </nav>
+    </header>
+
+    <div class="wrap">
+        {% if data.failed %}
+            <div class="notice notice--error">
+                The database could not be read. Scores below are empty; check the server log.
+            </div>
+        {% endif %}
+
+        <!--
+            Overview. Plain prose, above the KPI row, so a first-time reader knows what
+            they are looking at before they meet any numbers. Placeholder text is a
+            deliberate stand-in for copy the user is writing by hand.
+        -->
+        <section class="panel prose">
+            <h2>Overview</h2>
+            <p>When people talk about Artificial Intelligence in the workplace, 
+                the conversation usually focuses on broad, dramatic predictions: 
+                Which jobs will disappear? Which job titles are safe? 
+                In reality, technology rarely eliminates entire occupations overnight. 
+                Instead, it reshapes the individual tasks and daily competencies that make up a job. 
+                A Software Engineer, an Accountant, and a Legal Assistant might keep their job titles for decades, 
+                but the specific software, tools, and workflows they use every day are changing rapidly. 
+                This phenomenon is called skill drift. 
+                Because job titles can be slow to update and labor market statistics often lag years behind real-world trends, 
+                evaluating workplace transformation by job title alone leads to blind spots. 
+                This dashboard cuts through surface-level job titles to measure the underlying technical DNA of everyday work. 
+                By mapping standard workplace skills against the modern AI ecosystem, 
+                we can track real-time workplace changes empirically—giving workers, educators, and policy planners the 
+                clear data they need to navigate the future of work.</p>
+                <h2>How to Read</h2>
+                <p>The macro view of the dashboard measures the fundamental AI proximity of every skill across the entire labor market, 
+                categorizing them into absolute technical tiers regardless of specific job titles. Color-coding serves as the primary truth here: 
+                Core AI Skills (Dark Blue) represent direct machine learning and natural language processing capabilities, 
+                AI-Enabling Skills (Dark Red) highlight the essential data infrastructure and cloud backend required to power intelligence, 
+                and Non-AI Skills (Grey) anchor traditional operational tools. High-scoring skills on this global spectrum point to areas 
+                where generative capabilities or automated processing are heavily concentrated, indicating high potential for workflow automation. 
+                Conversely, low-scoring skills represent legacy tools and human-centered tasks that remain largely unaffected by current AI developments. 
+                Looking at the macro landscape helps readers identify which competencies are driving broad workforce transformation and where proactive, 
+                AI-augmented upskilling offers the highest strategic value.</p>
+        </section>
+
+        <!-- KPI row. Four headline numbers, so a row of stat tiles rather than a chart. -->
+        <section class="panel">
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat__value">{{ data.summary.skills_scored }}</div>
+                    <div class="stat__label">Skills scored</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ data.summary.tools_discovered }}</div>
+                    <div class="stat__label">Tools discovered</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ data.summary.occupations_covered }}</div>
+                    <div class="stat__label">Occupations covered</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ data.summary.at_ai_threshold }}</div>
+                    <div class="stat__label">At or above {{ "%.2f"|format(data.summary.ai_threshold) }} raw</div>
+                </div>
+            </div>
+        </section>
+
+        <div class="tabs" role="tablist">
+            <button class="tab" role="tab" id="tab-overview" aria-controls="view-overview" aria-selected="true">AI skills overview</button>
+            <button class="tab" role="tab" id="tab-roles" aria-controls="view-roles" aria-selected="false">Skills tracker by job</button>
+            <button class="tab" role="tab" id="tab-trend" aria-controls="view-trend" aria-selected="false">Trend over time</button>
+            <button class="tab" role="tab" id="tab-method" aria-controls="view-method" aria-selected="false">Methodology</button>
+        </div>
+
+        <!-- ============================ OVERVIEW ============================ -->
+        <section id="view-overview" role="tabpanel" aria-labelledby="tab-overview">
+
+            <!--
+                Composition first. It is a fixed-height summary of the whole set, so it
+                belongs above the ranked list rather than behind it: the ranked list grows
+                without bound as occupations are ingested, and a reader should not have to
+                scroll past thousands of skills to reach a three-segment summary.
+            -->
+            <section class="panel">
+                <div class="panel__head">
+                    <h2>Composition by AI category</h2>
+                    <div class="spacer"></div>
+                    <button class="ghost" data-table-toggle="buckets" aria-pressed="false">Table view</button>
+                </div>
+                <p class="panel__note">
+                    Counted on <strong>raw</strong> cosine scores, never normalized ones:
+                    at or above {{ "%.2f"|format(data.summary.ai_threshold) }} is an AI Skill,
+                    {{ "%.2f"|format(data.summary.enabling_threshold) }} to
+                    {{ "%.2f"|format(data.summary.ai_threshold) }} is AI Enabling,
+                    below that is not an AI skill. Bucketing after a per-view rescale would make a
+                    skill's category shift as you filter.
+                </p>
+                <div class="panel__body">
+                    <div class="stack" id="bucket-stack" role="img" aria-labelledby="bucket-legend"></div>
+                    <div class="legend" id="bucket-legend"></div>
+                    <div class="dtable__wrap hidden" id="buckets-table"></div>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2>Ranked skills</h2>
+                    <div class="spacer"></div>
+                    <button class="ghost" data-table-toggle="ranked" aria-pressed="false">Table view</button>
+                </div>
+                <p class="panel__note">
+                    Skills that are Hot Tech for at least one occupation, ranked by AI relevance.
+                    Bar length is normalized within whatever is currently filtered, so the strongest
+                    visible skill reads 1.00 and the weakest reads 0.00. Hover or click a bar for the
+                    raw score.
+                </p>
+
+                <div class="filters">
+                    <div class="field">
+                        <label for="skill-search">Skill</label>
+                        <input type="search" id="skill-search" placeholder="Filter by name" />
+                    </div>
+                    <div class="field">
+                        <label for="ranked-sort">Sort</label>
+                        <select id="ranked-sort">
+                            <option value="desc" selected>AI relevance, high to low</option>
+                            <option value="asc">AI relevance, low to high</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label id="cat-filter-label">AI category</label>
+                        <div class="chips" role="group" aria-labelledby="cat-filter-label" id="cat-filter"></div>
+                    </div>
+                </div>
+
+                <!--
+                    The list scrolls INSIDE the panel rather than being cut off. Every
+                    matching skill is still in the DOM and in the table view; only the
+                    viewport is bounded, so nothing is hidden from search, export or
+                    keyboard navigation.
+                -->
+                <p class="panel__note" id="ranked-count" aria-live="polite"></p>
+                <div class="panel__body">
+                    <div class="scrollbox">
+                        <ul class="bars" id="ranked-bars"></ul>
+                    </div>
+                    <div class="dtable__wrap hidden" id="ranked-table"></div>
+                    <p class="empty hidden" id="ranked-empty">No skills match the current filters.</p>
+                </div>
+                <div class="legend" id="ranked-legend"></div>
+            </section>
+        </section>
+
+        <!-- ============================= ROLES ============================== -->
+        <section id="view-roles" role="tabpanel" aria-labelledby="tab-roles" class="hidden">
+            <!-- Explanatory prose for this tab, above the chart it introduces. -->
+            <section class="panel prose">
+                <h2>Job Specific Skill Tracker</h2>
+                <p>When filtering the dashboard by a specific occupation, the visual bar gauges rescale from 0.00 to 1.00 
+                to highlight which competencies dominate that particular role, but the underlying color coding remains fixed 
+                to preserve universal context. If a skill ranking near 1.00 in your role is colored Dark Red, it signifies 
+                that even the most dominant tool in your daily workflow operates in a low-AI exposure domain, meaning your 
+                role relies heavily on traditional, human-anchored capabilities. Alternatively, if your lowest-ranked skills 
+                are Medium Blue or Dark Blue, your field is deeply intertwined with the AI ecosystem, making AI integration 
+                essential across your entire work output. High scores within your specific job profile indicate tasks best 
+                approached by learning how to partner with AI assistants to boost execution speed, while lower scores highlight 
+                baseline domain knowledge that can be mastered without immediate concern for technological disruption.</p>
+            </section>
+
+            <section class="panel">
+                <div class="panel__head">
+                    <h2>Role-Specific Skill Tracking</h2>
+                    <div class="spacer"></div>
+                    <button class="ghost" data-table-toggle="role" aria-pressed="false">Table view</button>
+                </div>
+                <p class="panel__note">
+                    Skills by jobs were determined by whether a skill is considered 'hot tech' 
+                    those skills are the ones being listed frequently on job posts. 
+                    Hot Tech status is read per occupation, not globally: a skill hot for Data
+                    Scientists but not for Database Architects appears under the former only.
+                    Normalized within this role. 
+                </p>
+
+                <div class="filters">
+                    <div class="field" style="flex: 1; min-width: 280px;">
+                        <label for="occupation-select">O*NET code or job title</label>
+                        <select id="occupation-select"></select>
+                    </div>
+                </div>
+
+                <div class="panel__body">
+                    <!-- Same bounded-viewport treatment as the ranked list. -->
+                    <div class="scrollbox">
+                        <ul class="bars" id="role-bars"></ul>
+                    </div>
+                    <div class="dtable__wrap hidden" id="role-table"></div>
+                    <p class="empty hidden" id="role-empty">No hot tech skills recorded for this occupation.</p>
+                </div>
+                <div class="legend" id="role-legend"></div>
+            </section>
+        </section>
+
+        <!-- ============================= TREND ============================== -->
+        <section id="view-trend" role="tabpanel" aria-labelledby="tab-trend" class="hidden">
+            <section class="panel">
+                <div class="panel__head">
+                    <h2>AI score over time</h2>
+                </div>
+                <p class="panel__note">
+                    Raw cosine score at each 90-day re-summarization snapshot. Unnormalized, because
+                    the point is movement in the true value. One series at a time, so no legend is
+                    needed -- the title names it.
+                </p>
+
+                <div class="filters">
+                    <div class="field" style="flex: 1; min-width: 280px;">
+                        <label for="trend-select">Skill</label>
+                        <select id="trend-select"></select>
+                    </div>
+                </div>
+
+                <div class="panel__body">
+                    <svg class="trend" id="trend-chart" role="img" aria-label="AI score over time"></svg>
+                    <p class="panel__note" id="trend-note"></p>
+                    <div class="dtable__wrap" id="trend-table"></div>
+                </div>
+            </section>
+        </section>
+
+        <!-- =========================== METHODOLOGY ========================== -->
+        <section id="view-method" role="tabpanel" aria-labelledby="tab-method" class="hidden">
+            <section class="panel prose">
+                <h2>How we got the numbers</h2>
+                <p>
+                    This score shows how closely a skill connects to the world of artificial
+                    intelligence. Rather than showing raw similarity values, most panels scale the
+                    scores relative to each other so the most AI-intensive skills rise to the top.
+                </p>
+                <ul>
+                    <li><strong>Occupational skill tracking.</strong> The pipeline pulls the tools
+                        and technologies O*NET records against each occupation, so the data reflects
+                        catalogued workplace practice rather than a fixed list.</li>
+                    <li><strong>The AI proximity engine.</strong> Every skill's name and its vetted
+                        definition are read together, and the system measures the conceptual distance
+                        between that text and modern AI technologies.</li>
+                    <li><strong>Why the scores are normalized.</strong> Raw similarity values cluster
+                        tightly; even an unambiguously AI tool may only register around 0.47. Most
+                        panels therefore stretch the visible range onto 0.00 to 1.00.</li>
+                    <li><strong>Reading a 1.00.</strong> It does not mean a skill is entirely
+                        artificial intelligence. It means it is the highest AI-correlated skill
+                        <em>within the current view</em>.</li>
+                </ul>
+
+                <h3>Normalization</h3>
+                <p>Bar length uses min-max normalization across the filtered slice:</p>
+                <span class="formula">normalized = (x - min) / (max - min)</span>
+                <p>
+                    Two consequences worth knowing. The lowest skill in any view renders as 0.00,
+                    which reflects its rank in that slice and not a zero score. And because the
+                    window is the filtered slice, a skill's bar changes as you filter while its raw
+                    score never does. Raw values are always shown in the tooltip, the detail panel,
+                    and every table view.
+                </p>
+
+                <h3>Embedding and similarity</h3>
+                <p>
+                    Skill titles and definitions are encoded into 384-dimensional vectors by a local
+                    all-MiniLM-L6-v2 model running under ONNX Runtime, with mean pooling over the
+                    token embeddings so description length does not distort the result. Vectors are
+                    L2-normalized, which reduces cosine similarity to a dot product:
+                </p>
+                <span class="formula">similarity = A · B        (for unit vectors)</span>
+                <p>
+                    The AI score is a winner-take-all maximum against two poles, AI Engineering
+                    and Generative AI, measured across both the skill's name and its definition.
+                    Taking the maximum keeps a strong signal in either text from being diluted by
+                    the other.
+                </p>
+                <p>
+                    Three further anchors describe <em>how</em> a skill is adjacent to AI rather
+                    than how close it is, and are reported alongside the score without feeding
+                    into it: <strong>Tech base</strong> for languages, libraries and numerical
+                    computing; <strong>ML pipeline</strong> for orchestration, distributed compute
+                    and model infrastructure; and <strong>Embedded AI</strong> for copilots,
+                    assistants and generative features built into everyday tools. Blending all
+                    five into one number would change every score already recorded and make the
+                    history incomparable.
+                </p>
+                <p>
+                    Scores are stored signed, so genuine anti-correlation is preserved rather than
+                    clipped to zero.
+                </p>
+
+                <h3>Interpreting the three classes</h3>
+                <ul>
+                    <li><strong>AI Skill.</strong> Cognitive modelling, machine learning frameworks,
+                        transformer architectures.</li>
+                    <li><strong>AI Enabling.</strong> The infrastructure, MLOps, and data platforms
+                        required to deploy and scale that intelligence.</li>
+                    <li><strong>Not an AI skill.</strong> Legacy workflows and domain tools that
+                        remain anchored to human judgement.</li>
+                </ul>
+                <div class="notice">
+                    A calibration caveat: arbitrary English text scores roughly 0.10 to 0.15 against
+                    the AI poles simply for being language, so the lower band is a floor effect
+                    rather than a measurement of AI content. Treat small differences near the bottom
+                    of the range as noise.
+                </div>
+
+                <h3>Human review</h3>
+                <p>
+                    A skill reaches these panels only after its reference page clears a cross-encoder
+                    relevance gate and its source passes a credibility audit, or after a human
+                    approves it in the
+                    <a href="/">review queue</a>. Nothing is scored before that point.
+                </p>
+            </section>
+        </section>
+    </div>
+
+    <!-- Detail drawer, reusing the review view's component. -->
+    <div class="scrim" id="scrim" data-open="false"></div>
+    <aside class="drawer" id="drawer" data-open="false" aria-hidden="true" aria-label="Skill detail">
+        <div class="drawer__head">
+            <h2 id="drawer-title">Skill</h2>
+            <button class="ghost" id="drawer-close" aria-label="Close detail">Close</button>
+        </div>
+        <div id="drawer-content"></div>
+    </aside>
+
+    <div class="tip" id="tip" role="tooltip" data-open="false"></div>
+
+    <script type="application/json" id="dashboard-data">{{ payload }}</script>
+    <script src="/static/dashboard.js"></script>
+</body>
+</html>

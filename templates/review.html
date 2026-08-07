@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Skills Analytics - HITL Review Queue</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header class="topbar">
+        <h1>AI Skills Analytics <span>HITL Queue</span></h1>
+        <div class="spacer"></div>
+        <nav class="chips" aria-label="Views" style="margin-right: 8px;">
+            <a class="chip" href="/dashboard">Dashboard</a>
+        </nav>
+        <div class="stats">
+            <div class="stat">
+                <div class="stat__value">{{ stats.pending }}</div>
+                <div class="stat__label">Pending</div>
+            </div>
+            <div class="stat">
+                <div class="stat__value">{{ stats.approved }}</div>
+                <div class="stat__label">Approved</div>
+            </div>
+            <div class="stat">
+                <div class="stat__value">{{ stats.rejected }}</div>
+                <div class="stat__label">Rejected</div>
+            </div>
+            {% if stats.superseded %}
+                <div class="stat" title="Queued by a superseded pipeline with no definition text, so they cannot be reviewed. Kept for audit.">
+                    <div class="stat__value">{{ stats.superseded }}</div>
+                    <div class="stat__label">Superseded</div>
+                </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <div class="wrap">
+        <section class="card">
+            <div class="card__head">
+                <h3>Ingest O*NET Occupations</h3>
+            </div>
+            <form action="/ingest" method="POST" class="filters">
+                <div class="field" style="flex: 1; min-width: 320px;">
+                    <label for="onet_code">Occupation code or SOC family prefix</label>
+                    <input type="text" id="onet_code" name="onet_code"
+                           placeholder="15-2051.00 for one job, or 15- for the whole family"
+                           required />
+                </div>
+                <button type="submit" class="primary">Run Ingestion</button>
+            </form>
+
+            {% if backlog.count %}
+                <div class="notice {{ 'notice--error' if backlog.quota_stopped else 'notice--warn' }}"
+                     style="margin-top: 10px;">
+                    {% if backlog.quota_stopped %}
+                        <strong>All Gemini tokens were exhausted for the day.</strong>
+                        {{ backlog.count }} target(s) were never ingested and are queued.
+                        Nothing was written unaudited, and nothing is waiting in the review
+                        queue because of it.
+                    {% else %}
+                        <strong>{{ backlog.count }} ingestion target(s) queued</strong> from an
+                        interrupted run.
+                    {% endif %}
+                    <br><br>
+                    <span class="mono">{{ backlog.targets|join(', ') }}{% if backlog.count > backlog.targets|length %}, and {{ backlog.count - backlog.targets|length }} more{% endif %}</span>
+                    <br><br>
+                    These run automatically before anything new, on the next ingestion from
+                    this form or from <span class="mono">python3.11 ingest.py</span>.
+                </div>
+            {% endif %}
+
+            {% if ingest_err %}
+                <div class="notice notice--error" style="margin-top: 10px;">
+                    Not recognized: <span class="mono">{{ ingest_err }}</span>. Use a full code
+                    like <span class="mono">15-2051.00</span> or a family prefix like
+                    <span class="mono">15-</span>.
+                </div>
+            {% elif ingest_ok %}
+                <div class="notice notice--ok" style="margin-top: 10px;">
+                    Started in the background: <span class="mono">{{ ingest_ok }}</span>.
+                    Reload in a few minutes to see new items.
+                </div>
+            {% endif %}
+
+            <p class="muted" style="margin-top: 10px;">
+                One field takes both. A full code (<span class="mono">15-2051.00</span>) pulls a
+                single occupation; a family prefix (<span class="mono">15-</span>) pulls every
+                occupation in that SOC major group, which is dozens of jobs and a long run.
+                Separate several with commas.
+            </p>
+            <p class="muted" style="margin-top: 6px;">
+                Ingestion runs in the background. Items scoring at or above
+                <span class="mono">{{ "%.2f"|format(threshold) }}</span> on the cross-encoder
+                that also pass the credibility audit are approved automatically and never
+                appear here. Everything below only reaches this queue.
+            </p>
+        </section>
+
+        <!--
+            Second pass over the queue. Three buttons rather than one because the modes
+            differ in how much happens without a click: the first changes no card at
+            all, the second rewrites cards, the third also approves. Ordered least to
+            most, and the least is both first and the server-side fallback.
+        -->
+        <section class="card">
+            <div class="card__head">
+                <h3>Second pass over the queue</h3>
+            </div>
+            <p class="muted" style="margin: 0 0 12px;">
+                Most items below are here because the resolver matched the wrong article,
+                not because the definition was judged badly. This asks which article each
+                skill actually names, then re-fetches, rescores and re-audits that answer.
+                Items it has already settled are skipped, so running it twice costs nothing.
+            </p>
+
+            <form action="/second-pass" method="POST" class="filters">
+                <div class="field" style="min-width: 160px;">
+                    <label for="sp_limit">How many items</label>
+                    <input type="text" id="sp_limit" name="limit" value="25" />
+                </div>
+                <button type="submit" name="apply_mode" value="suggest" class="primary">
+                    Propose changes
+                </button>
+                <button type="submit" name="apply_mode" value="apply">
+                    Fix pages
+                </button>
+                <button type="submit" name="apply_mode" value="auto">
+                    Fix pages and approve clean matches
+                </button>
+            </form>
+
+            {% if second_pass_err %}
+                <div class="notice notice--error" style="margin-top: 10px;">
+                    {{ second_pass_err }}
+                </div>
+            {% elif second_pass_ok %}
+                <div class="notice notice--ok" style="margin-top: 10px;">
+                    {{ second_pass_ok }}
+                </div>
+            {% endif %}
+
+            <p class="muted" style="margin-top: 10px;">
+                <strong>Propose changes</strong> touches nothing. It records what it found
+                on each card as a proposal with an accept button, so every change is still
+                your click. Start here.
+                <br>
+                <strong>Fix pages</strong> additionally repoints cards at the articles it
+                found and writes the definitions it drafted, without your click. It still
+                approves nothing and cannot reach the dashboard.
+                <br>
+                <strong>Fix pages and approve clean matches</strong> additionally approves
+                an item outright when the article it found clears
+                <span class="mono">{{ "%.2f"|format(threshold) }}</span> and passes the
+                credibility audit, which is the same bar ingestion already auto-approves on.
+                <br><br>
+                All three spend Gemini quota. Only the last two change anything on their own.
+            </p>
+        </section>
+
+        <!--
+            Post-mortem editing of an ALREADY-APPROVED skill. Separate from the pending
+            queue below on purpose: these skills have been decided and scored, and this
+            corrects the record rather than making a decision.
+        -->
+        <section class="card">
+            <div class="card__head">
+                <h3>Edit an approved skill</h3>
+            </div>
+            <p class="muted" style="margin: 0 0 12px;">
+                Search an approved skill to correct its definition or reference page after the
+                fact. Saving rescores the text and updates the most recent snapshot in place,
+                marked as an override, so the trend history is corrected rather than gaining a
+                second point for the same day.
+            </p>
+
+            <form action="/" method="GET" class="filters">
+                <div class="field" style="flex: 1; min-width: 280px;">
+                    <label for="skill_q">Skill name</label>
+                    <input type="text" id="skill_q" name="skill_q" value="{{ skill_q }}"
+                           placeholder="e.g. Python" />
+                </div>
+                <button type="submit">Search</button>
+            </form>
+
+            {% if edit_error %}
+                <div class="notice notice--error" style="margin-top: 12px;">{{ edit_error }}</div>
+            {% elif edit_message %}
+                <div class="notice notice--ok" style="margin-top: 12px;">
+                    {{ edited_skill }} &mdash; {{ edit_message }}
+                </div>
+            {% endif %}
+
+            {% if skill_q %}
+                {% if not search.results %}
+                    <p class="muted" style="margin-top: 12px;">
+                        No approved, scored skill matches &ldquo;{{ skill_q }}&rdquo;.
+                    </p>
+                {% else %}
+                    <p class="muted" style="margin-top: 12px;">
+                        {% if search.truncated %}
+                            Showing the first {{ search.results|length }} of {{ search.total }} matches.
+                            Narrow the search to reach the rest.
+                        {% else %}
+                            {{ search.total }} match{{ '' if search.total == 1 else 'es' }}.
+                        {% endif %}
+                    </p>
+
+                    {% for skill in search.results %}
+                        <div class="editcard">
+                            <div class="editcard__head">
+                                <span class="editcard__name">{{ skill.skill_name }}</span>
+                                <span class="editcard__meta">
+                                    raw {{ "%.4f"|format(skill.ai_correlation_score) }}
+                                    &middot; snapshot {{ skill.snapshot_date }}
+                                    {%- if skill.is_override %} &middot; already overridden{% endif %}
+                                </span>
+                                <div class="spacer"></div>
+                                {% if skill.open_reports %}
+                                    <span class="badge badge--warn">
+                                        {{ skill.open_reports }} open in queue
+                                    </span>
+                                {% endif %}
+                            </div>
+
+                            <form action="/edit-skill/{{ skill.skill_name|urlencode }}" method="POST"
+                                  style="margin-top: 10px;">
+                                <input type="hidden" name="skill_q" value="{{ skill_q }}">
+                                <input type="hidden" name="skill_name" value="{{ skill.skill_name }}">
+
+                                <div class="field" style="margin-bottom: 10px;">
+                                    <label for="ref-{{ loop.index }}">
+                                        Reference page (Wikipedia URL or title)
+                                    </label>
+                                    <input type="text" id="ref-{{ loop.index }}" name="reference"
+                                           value="{{ skill.resolved_title or skill.wiki_title }}" />
+                                </div>
+
+                                <div class="field" style="margin-bottom: 10px;">
+                                    <label for="sum-{{ loop.index }}">
+                                        Definition used for vector scoring
+                                    </label>
+                                    <textarea id="sum-{{ loop.index }}" name="override_summary"
+                                              required>{{ skill.summary_text }}</textarea>
+                                </div>
+
+                                <!--
+                                    Stated because it is the opposite of the pending-item
+                                    remediation field, where supplying a page DOES replace
+                                    the text.
+                                -->
+                                <p class="muted" style="margin: 0 0 10px; font-size: 12.5px;">
+                                    The text above is what gets rescored. Changing the reference
+                                    records a different page but does not refetch its wording, so
+                                    an edit here is never overwritten.
+                                </p>
+
+                                <button type="submit" class="primary">Save correction</button>
+                            </form>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endif %}
+        </section>
+
+        <section class="queue-section">
+            <div class="card__head" style="margin-bottom: 6px;">
+                <h2>Pending Validation Items ({{ total_pending }})</h2>
+            </div>
+            {% if items %}
+                <p class="muted" style="margin: 0 0 16px;">
+                    Showing {{ first_index }}&ndash;{{ last_index }} of {{ total_pending }}
+                    {%- if total_pages > 1 %} &middot; page {{ page }} of {{ total_pages }}{% endif %}
+                </p>
+            {% endif %}
+
+            {% if not items %}
+                <div class="card empty">
+                    <p class="muted">No pending items in queue for validation.</p>
+                </div>
+            {% endif %}
+
+            <div class="cards-grid">
+                {% for item in items %}
+                    <div class="card">
+                        <div class="card__head">
+                            <h3>{{ item.skill_name }}</h3>
+                            <div class="spacer"></div>
+                            {% if item.second_pass and item.second_pass.outcome in ('suggested', 'suggested_strong', 'suggested_weak') %}
+                                <span class="badge badge--ok">Suggestion ready</span>
+                            {% elif item.second_pass and item.second_pass.outcome == 'drafted' %}
+                                <span class="badge badge--warn">Draft ready</span>
+                            {% endif %}
+                            {% if item.gate_reason == 'no_candidate_found' %}
+                                <span class="badge badge--danger">{{ item.gate_label }}</span>
+                            {% else %}
+                                <span class="badge badge--warn">{{ item.gate_label }}</span>
+                            {% endif %}
+                        </div>
+
+                        {% if error_message and error_item == item.skill_name %}
+                            <div class="notice notice--error">{{ error_message }}</div>
+                        {% endif %}
+
+                        <!--
+                            Why this item was flagged, so the reviewer is not judging blind.
+
+                            The model-authored test comes FIRST and is not keyed on
+                            gate_reason. Those items keep no_candidate_found, because that
+                            is still why they are in the queue, but the notice that reason
+                            normally prints ("the text below is boilerplate") is no longer
+                            true of them and would send a reviewer looking for a page that
+                            does not exist.
+                        -->
+                        {% if item.second_pass and item.second_pass.outcome == 'model_authored' %}
+                            <div class="notice notice--error">
+                                <strong>This definition has no source.</strong> No encyclopedia
+                                article covers this product, so the text below was written by
+                                the model from the O*NET name and category alone. Nothing
+                                corroborates it and it cannot be approved automatically.
+                                Verify it yourself or reject.
+                                {% if item.second_pass.rationale %}
+                                    <br><br><span class="mono">{{ item.second_pass.rationale }}</span>
+                                {% endif %}
+                            </div>
+                        {% elif item.gate_reason == 'machine_remediated' %}
+                            <div class="notice notice--warn">
+                                This page was proposed by an automated lookup, not by a person,
+                                and applied. The score below is recorded for information only,
+                                not enforced. Read the text before approving.
+                                {% if item.second_pass and item.second_pass.rationale %}
+                                    <br><br><span class="mono">{{ item.second_pass.rationale }}</span>
+                                {% endif %}
+                            </div>
+                        {% elif item.gate_reason == 'reported_by_viewer' %}
+                            <div class="notice notice--warn">
+                                A dashboard viewer reported this skill. It is <strong>already
+                                approved and scored</strong>, and still is: the text and page below
+                                are what the dashboard is showing right now. Fix them and approve
+                                to correct the record, or reject to dismiss the report.
+                                {% if item.report_note %}
+                                    <br><br>Reported: <span class="mono">{{ item.report_note }}</span>
+                                {% endif %}
+                            </div>
+                        {% elif item.gate_reason == 'reviewer_remediated' %}
+                            <div class="notice notice--warn">
+                                This text came from a page a reviewer supplied by hand. It was
+                                never credibility-audited, and the score below is recorded for
+                                information only, not enforced. Read it before approving.
+                            </div>
+                        {% elif item.gate_reason == 'no_candidate_found' %}
+                            <div class="notice notice--error">
+                                No reference page could be resolved. The text below is O*NET
+                                taxonomy boilerplate, not a real definition. Replace it or reject.
+                            </div>
+                        {% elif item.gate_reason == 'failed_credibility_audit' %}
+                            <div class="notice notice--warn">
+                                The page match looked correct, but the source audit judged it
+                                not authoritative. Verify before approving.
+                            </div>
+                        {% elif item.gate_reason == 'audit_unavailable' %}
+                            <div class="notice notice--warn">
+                                The page match was strong, but the credibility audit could
+                                not run (API quota or outage), so this text is the raw
+                                extract and was never distilled or vetted.
+                            </div>
+                        {% elif item.gate_reason == 'discovered_not_audited' %}
+                            <div class="notice notice--warn">
+                                Recorded from the O*NET occupation map but never audited,
+                                normally because it is not flagged Hot Technology. There is
+                                no fetched definition to judge.
+                            </div>
+                        {% elif item.gate_reason == 'below_relevance_threshold' %}
+                            <div class="notice notice--warn">
+                                The cross-encoder is not confident this page is about this skill,
+                                so no credibility audit was run. Confirm the text describes the
+                                right subject.
+                            </div>
+                        {% endif %}
+
+                        <dl class="kv" style="margin-bottom: 16px;">
+                            <dt>Category</dt>
+                            <dd>{{ item.category }}</dd>
+
+                            <dt>O*NET Target</dt>
+                            <dd>
+                                {% if item.onet_code %}
+                                    <span class="mono">{{ item.onet_code }}</span> ({{ item.onet_title }})
+                                    {%- if item.occupation_count > 1 %}
+                                        <span class="muted">and {{ item.occupation_count - 1 }} more</span>
+                                    {%- endif %}
+                                {% else %}
+                                    <span class="muted">Not mapped</span>
+                                {% endif %}
+                            </dd>
+
+                            <dt>Resolved Page</dt>
+                            <dd>
+                                {% if item.resolved_title %}
+                                    <a href="https://en.wikipedia.org/wiki/{{ item.resolved_title|replace(' ', '_')|urlencode }}"
+                                       target="_blank" rel="noopener noreferrer">{{ item.resolved_title }}</a>
+                                {% else %}
+                                    <span class="muted">None resolved</span>
+                                {% endif %}
+                            </dd>
+
+                            <dt>Cross-Encoder</dt>
+                            <dd>
+                                {% if item.cross_score is not none %}
+                                    <span class="mono">{{ "%.4f"|format(item.cross_score) }}</span>
+                                    {% if item.gate_reason == 'reviewer_remediated' %}
+                                        <span class="muted">not enforced on a reviewer-supplied page</span>
+                                    {% elif item.gate_reason == 'machine_remediated' %}
+                                        <span class="muted">not enforced on a machine-suggested page</span>
+                                    {% else %}
+                                        <span class="muted">/ {{ "%.2f"|format(threshold) }} required</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="muted">Not scored</span>
+                                {% endif %}
+                                {% if item.second_pass and item.second_pass.outcome == 'confirmed_original' %}
+                                    <br><span class="muted">An independent lookup proposed this same page.</span>
+                                {% endif %}
+                            </dd>
+
+                            <dt>Credibility Audit</dt>
+                            <dd>
+                                {% if item.is_credible is none %}
+                                    <span class="muted">Not run</span>
+                                {% elif item.is_credible %}
+                                    Passed
+                                {% else %}
+                                    Failed
+                                {% endif %}
+                            </dd>
+
+                            <dt>Best Source</dt>
+                            <dd>
+                                {% if item.best_source_name %}
+                                    {{ item.best_source_name }}
+                                {% else %}
+                                    <span class="muted">Unattributed</span>
+                                {% endif %}
+                            </dd>
+                        </dl>
+
+                        <!--
+                            What the second pass found. Only the branches that give the
+                            reviewer something to DO render anything; a finding that merely
+                            confirms the status quo is shown beside the score instead.
+                        -->
+                        {% if item.second_pass %}
+                            {% set sp = item.second_pass %}
+                            {% if sp.outcome in ('suggested', 'suggested_strong', 'suggested_weak') %}
+                                <div class="notice notice--ok" style="margin-bottom: 16px;">
+                                    An automated lookup thinks this skill is really
+                                    <a href="https://en.wikipedia.org/wiki/{{ sp.proposed_title|replace(' ', '_')|urlencode }}"
+                                       target="_blank" rel="noopener noreferrer"><strong>{{ sp.proposed_title }}</strong></a>,
+                                    not {{ sp.prior_title or "the page on file" }}.
+                                    {% if sp.rationale %}
+                                        <br><span class="mono">{{ sp.rationale }}</span>
+                                    {% endif %}
+                                    <br><br>
+                                    That page scores
+                                    {% if sp.measured_score is not none %}
+                                        <span class="mono">{{ "%.4f"|format(sp.measured_score) }}</span>
+                                    {% else %}
+                                        unscored
+                                    {% endif %}
+                                    against the <span class="mono">{{ "%.2f"|format(threshold) }}</span>
+                                    threshold, and
+                                    {%- if sp.outcome == 'suggested_weak' %}
+                                        the credibility audit did <strong>not</strong> clear it.
+                                    {%- else %}
+                                        the credibility audit passed.
+                                    {%- endif %}
+                                </div>
+
+                                <!-- Own form: forms cannot nest, same as remediation below. -->
+                                <form action="/apply-suggestion/{{ item.skill_name|urlencode }}" method="POST"
+                                      style="margin-bottom: 16px;">
+                                    <input type="hidden" name="page" value="{{ page }}">
+                                    <button type="submit" class="primary" style="width: 100%;">
+                                        Use suggested page: {{ sp.proposed_title }}
+                                    </button>
+                                </form>
+                            {% elif sp.outcome == 'drafted' %}
+                                <div class="notice notice--error" style="margin-bottom: 16px;">
+                                    <strong>A definition was drafted, with no source behind it.</strong>
+                                    No encyclopedia article covers this product, so the model
+                                    wrote the text below from the O*NET name and category
+                                    alone. Nothing corroborates it. It has NOT been put on the
+                                    card; accepting is your call.
+                                    {% if sp.rationale %}
+                                        <br><span class="mono">{{ sp.rationale }}</span>
+                                    {% endif %}
+                                    <br><br>
+                                    <em>{{ sp.drafted_definition }}</em>
+                                </div>
+
+                                <!-- Own form: forms cannot nest, same as remediation below. -->
+                                <form action="/apply-draft/{{ item.skill_name|urlencode }}" method="POST"
+                                      style="margin-bottom: 16px;">
+                                    <input type="hidden" name="page" value="{{ page }}">
+                                    <button type="submit" style="width: 100%;">
+                                        Use this definition
+                                    </button>
+                                </form>
+                            {% elif sp.outcome == 'no_article' or sp.outcome == 'not_a_product' %}
+                                <div class="notice notice--warn" style="margin-bottom: 16px;">
+                                    An automated lookup found no encyclopedia article for this
+                                    {{ "product" if sp.outcome == 'no_article' else "name, and does not think it names a real product" }}.
+                                    {% if sp.rationale %}
+                                        <br><span class="mono">{{ sp.rationale }}</span>
+                                    {% endif %}
+                                </div>
+                            {% elif sp.outcome == 'confirmed_original_failed_audit' %}
+                                <div class="notice notice--warn" style="margin-bottom: 16px;">
+                                    An automated lookup agreed this is the right page, so the
+                                    failed audit above stands against the correct article rather
+                                    than a mismatched one. This one needs your judgement.
+                                </div>
+                            {% endif %}
+                        {% endif %}
+
+                        <!--
+                            Remediation sits above the textarea because it REPLACES the
+                            textarea's contents. Its own form, since forms cannot nest.
+                        -->
+                        <form action="/remediate/{{ item.skill_name|urlencode }}" method="POST"
+                              style="margin-bottom: 16px;">
+                            <input type="hidden" name="page" value="{{ page }}">
+                            <div class="field" style="margin-bottom: 8px;">
+                                <label for="reference-{{ loop.index }}">
+                                    Wrong page? Replace it with the correct URL
+                                </label>
+                                <input type="text" id="reference-{{ loop.index }}"
+                                       name="reference"
+                                       placeholder="https://en.wikipedia.org/wiki/Apache_Spark" />
+                            </div>
+                            <button type="submit" style="width: 100%;">
+                                Fetch and rescore
+                            </button>
+                        </form>
+
+                        <form action="/approve/{{ item.skill_name|urlencode }}" method="POST">
+                            <input type="hidden" name="page" value="{{ page }}">
+                            <div class="field" style="margin-bottom: 12px;">
+                                <label for="summary-{{ loop.index }}">
+                                    Definition used for vector scoring (editable)
+                                </label>
+                                <textarea id="summary-{{ loop.index }}" name="override_summary" required>{{ item.wikipedia_summary }}</textarea>
+                            </div>
+
+                            <div class="card__actions">
+                                <button type="submit" class="primary" style="flex: 1;">Approve and Score</button>
+                            </div>
+                        </form>
+
+                        <form action="/reject/{{ item.skill_name|urlencode }}" method="POST" style="margin-top: 8px;">
+                            <input type="hidden" name="page" value="{{ page }}">
+                            <button type="submit" class="danger" style="width: 100%;">
+                                {%- if item.second_pass and item.second_pass.suggested_action == 'reject' -%}
+                                    Reject, no reference page exists
+                                {%- else -%}
+                                    Reject
+                                {%- endif -%}
+                            </button>
+                        </form>
+                    </div>
+                {% endfor %}
+            </div>
+
+            {% if total_pages > 1 %}
+                <nav class="chips" aria-label="Pagination" style="margin-top: 18px; justify-content: center;">
+                    {% if page > 1 %}
+                        <a class="chip" href="/?page={{ page - 1 }}" rel="prev">Previous</a>
+                    {% endif %}
+
+                    {% for number in window %}
+                        {% if number is none %}
+                            <span class="muted" aria-hidden="true">&hellip;</span>
+                        {% elif number == page %}
+                            <span class="chip" aria-pressed="true" aria-current="page">{{ number }}</span>
+                        {% else %}
+                            <a class="chip" href="/?page={{ number }}">{{ number }}</a>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page < total_pages %}
+                        <a class="chip" href="/?page={{ page + 1 }}" rel="next">Next</a>
+                    {% endif %}
+                </nav>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>
