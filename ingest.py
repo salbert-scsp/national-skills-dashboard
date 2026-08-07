@@ -34,7 +34,12 @@ import logging
 import sys
 
 import backlog as backlog_store
-from definitions_algorithm import normalize_targets, run_backlog, run_targets
+from definitions_algorithm import (
+    SOC_MAJOR_GROUPS,
+    normalize_targets,
+    run_backlog,
+    run_targets,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,17 +48,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Shown when prompting, so the prefixes are not something to look up elsewhere.
-FAMILY_HINTS = [
-    ("11-", "Management"),
-    ("13-", "Business and Financial Operations"),
-    ("15-", "Computer and Mathematical"),
-    ("17-", "Architecture and Engineering"),
-    ("19-", "Life, Physical, and Social Science"),
-    ("23-", "Legal"),
-    ("25-", "Educational Instruction and Library"),
-    ("27-", "Arts, Design, Entertainment, Sports, and Media"),
-    ("29-", "Healthcare Practitioners and Technical"),
-]
+# Imported rather than re-listed: this used to hold nine of the twenty-three groups and
+# call them "the common ones", which meant the prompt quietly implied the other
+# fourteen did not exist.
+FAMILY_HINTS = SOC_MAJOR_GROUPS
 
 
 def prompt_for_prefixes() -> list:

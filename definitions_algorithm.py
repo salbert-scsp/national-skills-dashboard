@@ -27,7 +27,7 @@ Cost discipline, in the order it applies:
 import datetime
 import logging
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import backlog as backlog_store
 import json_store
@@ -97,6 +97,54 @@ def normalize_targets(raw: Iterable[str]) -> List[str]:
     if not cleaned:
         raise ValueError("No targets supplied; nothing to ingest.")
     return cleaned
+
+
+# The complete SOC major-group set, all 23 of them. ingest.py's FAMILY_HINTS listed
+# nine of these and called them "the common ones"; a full scrape needs every group, and
+# one list beats two that drift apart.
+SOC_MAJOR_GROUPS = (
+    ("11-", "Management"),
+    ("13-", "Business and Financial Operations"),
+    ("15-", "Computer and Mathematical"),
+    ("17-", "Architecture and Engineering"),
+    ("19-", "Life, Physical, and Social Science"),
+    ("21-", "Community and Social Service"),
+    ("23-", "Legal"),
+    ("25-", "Educational Instruction and Library"),
+    ("27-", "Arts, Design, Entertainment, Sports, and Media"),
+    ("29-", "Healthcare Practitioners and Technical"),
+    ("31-", "Healthcare Support"),
+    ("33-", "Protective Service"),
+    ("35-", "Food Preparation and Serving Related"),
+    ("37-", "Building and Grounds Cleaning and Maintenance"),
+    ("39-", "Personal Care and Service"),
+    ("41-", "Sales and Related"),
+    ("43-", "Office and Administrative Support"),
+    ("45-", "Farming, Fishing, and Forestry"),
+    ("47-", "Construction and Extraction"),
+    ("49-", "Installation, Maintenance, and Repair"),
+    ("51-", "Production"),
+    ("53-", "Transportation and Material Moving"),
+    ("55-", "Military Specific"),
+)
+
+ALL_PREFIXES = [prefix for prefix, _ in SOC_MAJOR_GROUPS]
+
+
+def _emit(progress: Optional[Callable[[dict], None]], event: dict) -> None:
+    """
+    Fires a progress callback, swallowing anything it raises.
+
+    The callback belongs to the web layer and is a reporting concern only. An exception
+    inside it -- a full disk while writing the status file, say -- must never abort an
+    ingestion that has already spent hours of Gemini quota.
+    """
+    if progress is None:
+        return
+    try:
+        progress(event)
+    except Exception:
+        logger.exception("Progress callback failed; ingestion continues.")
 
 
 def normalize_prefixes(raw: Iterable[str]) -> List[str]:
@@ -376,7 +424,14 @@ def ingest_single_occupation(onet_code: str, force: bool = False) -> Dict[str, A
     return {**counts, "quota_exhausted": quota_exhausted}
 
 
-def run_ingestion(prefixes: List[str], limit: int = None, force: bool = False) -> Dict[str, Any]:
+def run_ingestion(
+    prefixes: List[str],
+    limit: int = None,
+    force: bool = False,
+    *,
+    progress: Optional[Callable[[dict], None]] = None,
+    should_continue: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
     """
     Full run across every occupation in the requested SOC families.
 
@@ -386,6 +441,10 @@ def run_ingestion(prefixes: List[str], limit: int = None, force: bool = False) -
     Both JSON files and the scrape cache are saved once at the end, and also saved if
     the run is interrupted -- a KeyboardInterrupt part-way through a long ingest must
     not throw away the work already paid for.
+
+    `progress` and `should_continue` are optional and keyword-only, so existing callers
+    are unaffected. A cooperative stop behaves exactly like the KeyboardInterrupt path
+    below: everything unstarted goes back on the backlog and the stores are saved.
     """
     prefixes = normalize_prefixes(prefixes)
     codes = select_onet_codes(prefixes)
@@ -404,9 +463,31 @@ def run_ingestion(prefixes: List[str], limit: int = None, force: bool = False) -
     totals = {"tools": 0, "hot": 0, "scraped": 0, "approved": 0, "pending": 0, "skipped": 0}
     processed = 0
     quota_exhausted = False
+    stopped = False
 
     try:
         for position, (onet_code, onet_title) in enumerate(ordered):
+            # Cooperative stop, at the occupation boundary for the same reason as in
+            # run_backlog: an occupation part-done is an occupation whose scraped work
+            # would be discarded. Everything unstarted goes back on the backlog, which
+            # is exactly what the KeyboardInterrupt handler below does.
+            if should_continue is not None and not should_continue():
+                stopped = True
+                remaining = [code for code, _ in ordered[position:]]
+                if remaining:
+                    backlog_store.add_targets(
+                        remaining, reason=backlog_store.REASON_INTERRUPTED
+                    )
+                logger.warning(
+                    "Stop requested after %d occupation(s); %d returned to the backlog.",
+                    processed, len(remaining),
+                )
+                break
+
+            _emit(progress, {
+                "event": "target_start", "target": onet_code, "title": onet_title,
+            })
+
             try:
                 counts = ingest_occupation(
                     onet_code, onet_title, master, timeseries, cache, force=force
@@ -423,10 +504,17 @@ def run_ingestion(prefixes: List[str], limit: int = None, force: bool = False) -
                     "%s Stopped after %d occupation(s); %d returned to the backlog.",
                     err, processed, len(remaining),
                 )
+                _emit(progress, {
+                    "event": "quota_stopped", "target": onet_code,
+                    "keys_tried": getattr(err, "keys_tried", 0),
+                })
                 break
             for key in totals:
                 totals[key] += counts.get(key, 0)
             processed += 1
+            _emit(progress, {
+                "event": "target_done", "target": onet_code, "counts": counts,
+            })
     except KeyboardInterrupt:
         # Everything not yet started is queued too, so a Ctrl-C during a long family
         # run is resumable rather than lost.
@@ -450,6 +538,7 @@ def run_ingestion(prefixes: List[str], limit: int = None, force: bool = False) -
         "totals": totals,
         "skills": len(master),
         "quota_exhausted": quota_exhausted,
+        "stopped": stopped,
     }
 
 
@@ -486,7 +575,12 @@ def run_targets(targets: List[str], limit: int = None, force: bool = False) -> D
     return totals
 
 
-def run_backlog(force: bool = False) -> Dict[str, Any]:
+def run_backlog(
+    force: bool = False,
+    *,
+    progress: Optional[Callable[[dict], None]] = None,
+    should_continue: Optional[Callable[[], bool]] = None,
+) -> Dict[str, Any]:
     """
     Drains the backlog, removing each target only once it has completed.
 
@@ -495,6 +589,10 @@ def run_backlog(force: bool = False) -> Dict[str, Any]:
     tomorrow's run repeats work that has already been paid for.
 
     Codes and prefixes are both accepted, distinguished by the dot in a full O*NET code.
+
+    `progress` and `should_continue` are optional and keyword-only, so every existing
+    caller -- ingest.py included -- behaves exactly as it did. When supplied they let a
+    UI report position and ask for a clean stop; see the stop check below.
     """
     targets = backlog_store.target_list()
     if not targets:
@@ -504,8 +602,25 @@ def run_backlog(force: bool = False) -> Dict[str, Any]:
 
     processed = 0
     quota_exhausted = False
+    stopped = False
 
     for target in targets:
+        # Cooperative stop, checked BEFORE dispatching a target and never inside one.
+        # An occupation is an indivisible unit of paid work: it holds an in-memory
+        # master that only its caller's finally block writes, so tearing out of the
+        # middle would throw away every skill it had already scraped and audited.
+        # Stopping here costs nothing, because the target is still on the backlog --
+        # it is only removed once it completes -- so resuming is just another drain.
+        if should_continue is not None and not should_continue():
+            stopped = True
+            logger.warning(
+                "Stop requested. Ending the drain after %d target(s); %d remain queued.",
+                processed, len(backlog_store.target_list()),
+            )
+            break
+
+        _emit(progress, {"event": "target_start", "target": target})
+
         try:
             if "." in target:
                 result = ingest_single_occupation(target, force=force)
@@ -519,6 +634,7 @@ def run_backlog(force: bool = False) -> Dict[str, Any]:
 
         if result.get("quota_exhausted"):
             quota_exhausted = True
+            _emit(progress, {"event": "quota_stopped", "target": target})
             break
 
         # A target that resolved to nothing is not proof the target is bad: the
@@ -547,6 +663,11 @@ def run_backlog(force: bool = False) -> Dict[str, Any]:
 
         backlog_store.remove_target(target)
         processed += 1
+        _emit(progress, {
+            "event": "target_done",
+            "target": target,
+            "counts": result.get("totals") or {},
+        })
 
     remaining = len(backlog_store.target_list())
     logger.info(
@@ -556,4 +677,45 @@ def run_backlog(force: bool = False) -> Dict[str, Any]:
         "processed": processed,
         "remaining": remaining,
         "quota_exhausted": quota_exhausted,
+        # Present only so a caller that asked for a cooperative stop can tell that from
+        # a natural finish. Existing callers never read it.
+        "stopped": stopped,
+    }
+
+
+def plan_full_scrape(prefixes: List[str] = None) -> Dict[str, Any]:
+    """
+    Expands SOC prefixes into concrete O*NET codes and queues every one of them.
+
+    Queueing CODES rather than the prefixes themselves is what makes a progress bar
+    possible at all. select_onet_codes costs one network call per prefix, so a run that
+    stored prefixes would have to re-expand them on every resume and could never state
+    a total. Expanded once, up front, the backlog itself becomes the odometer: it
+    already removes exactly one entry per completed occupation.
+
+    Codes already queued are skipped by add_targets, so re-planning is idempotent and a
+    second click cannot double the total.
+
+    Slow by nature -- 23 network calls for the full set. Callers must run it on a
+    background thread, not inside a request.
+    """
+    prefixes = normalize_prefixes(prefixes or ALL_PREFIXES)
+    baseline = len(backlog_store.target_list())
+
+    logger.info("Planning a full scrape over %d SOC group(s).", len(prefixes))
+    codes = select_onet_codes(prefixes)
+
+    added = backlog_store.add_targets(
+        sorted(codes), reason=backlog_store.REASON_REQUESTED
+    )
+    logger.warning(
+        "Planned %d occupation(s) across %d SOC group(s); %d newly queued, %d were "
+        "already owed.",
+        len(codes), len(prefixes), added, baseline,
+    )
+    return {
+        "total": len(codes),
+        "added": added,
+        "baseline": baseline,
+        "prefixes": prefixes,
     }
