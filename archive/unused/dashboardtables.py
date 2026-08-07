@@ -1,3 +1,13 @@
+"""
+DEAD -- do not run. Kept for reference only; nothing imports this.
+
+The SQL-direct version of the dashboard and review-queue flattening layer, reading the
+HITL_Validation_Queue and Skills_Historical_Metrics tables over pyodbc.
+
+Superseded by the root dashboardtables.py, which builds the same rows from the JSON
+store. Requires the retired SQL Server to run at all.
+"""
+
 import json
 import os
 import pyodbc

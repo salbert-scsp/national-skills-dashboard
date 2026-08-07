@@ -1,3 +1,15 @@
+"""
+DEAD -- do not run. Kept for reference only; nothing imports this.
+
+An early Streamlit dashboard that read a precomputed JSON file (COMPUTED_OUTPUT_FILE)
+and queried Microsoft SQL Server directly through pyodbc, with its own copy of the
+connection logic.
+
+Superseded twice over: the live UI is main.py (FastAPI + Jinja2, templates/ and
+static/), and storage is the JSON store behind storage.py, not SQL. Running this would
+need the retired database and the pandas/Streamlit stack.
+"""
+
 import os
 import json
 import pandas as pd

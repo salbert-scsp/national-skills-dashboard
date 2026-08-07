@@ -1,3 +1,18 @@
+"""
+DEAD, AND UNSAFE TO REVIVE. Kept only as a record of what this used to do.
+
+Line ~7 of the original body calls Tokenizer.from_pretrained(), which DOWNLOADS A
+TOKENIZER FROM HUGGING FACE at import time. That breaks the offline guarantee the live
+scorer is built on.
+
+The live scorer is the root sortingalgorithmnew.py. It loads tokenizer.json from disk
+with Tokenizer.from_file() and makes no network call for models at all -- which is why
+its scores are reproducible, why it needs no credentials, and why a network outage
+cannot silently change a number that ends up in the time series.
+
+If anything here is ever wanted, port the idea into the live module. Do not import this.
+"""
+
 import os
 import numpy as np
 import onnxruntime as ort

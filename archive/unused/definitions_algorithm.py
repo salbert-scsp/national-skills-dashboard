@@ -1,3 +1,15 @@
+"""
+DEAD -- do not run. Kept for reference only; nothing imports this.
+
+An earlier, class-based ingestion pipeline that pulled candidate definitions from three
+sources -- Wikipedia, GitHub and PyPI -- and wrote them to Microsoft SQL Server.
+
+Superseded by the root definitions_algorithm.py, which resolves a single best candidate,
+gates it on a local cross-encoder before spending any Gemini quota, and writes to the
+JSON store. The three-source approach is the thing worth reading here; the storage and
+scoring around it are obsolete.
+"""
+
 import os
 import json
 import re

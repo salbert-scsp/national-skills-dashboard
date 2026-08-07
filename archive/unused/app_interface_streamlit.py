@@ -1,4 +1,9 @@
 """
+DEAD -- do not run. Kept for reference only; nothing imports this. The live UI is
+main.py (FastAPI + Jinja2). One caveat if it is ever revived: its review actions
+duplicate the write logic inline instead of calling review_actions.py, which is the
+module documented as the only thing allowed to change a skill's review status.
+
 Streamlit frontend: dashboard, skill detail, HITL review, and trends.
 
     streamlit run app_interface.py

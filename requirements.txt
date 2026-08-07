@@ -4,32 +4,41 @@
 #
 #   python3.11 -m venv .venv && source .venv/bin/activate
 #   pip install -r requirements.txt
+#
+# Run the app from the project directory:  python3.11 main.py
+# Run an ingestion from the CLI:           python3.11 ingest.py 15-
 
-# UI layer
-streamlit==1.60.0
-plotly==6.9.0
-pandas==3.0.5
+# --- Web UI ---------------------------------------------------------------------
+# main.py is the entrypoint: a server-rendered FastAPI app over templates/ and
+# static/. There is no build step and no frontend framework.
+fastapi==0.141.1
+uvicorn==0.52.0
+Jinja2==3.1.6
+markupsafe==3.0.3          # main.py, escaping JSON embedded in the dashboard template
+python-multipart==0.0.32   # FastAPI Form() parsing on every review and admin endpoint
 
-# Offline inference
+# --- Offline inference -----------------------------------------------------------
+# Both ONNX models and tokenizer.json load from disk and make no network call. That is
+# deliberate: it is why scores are reproducible and why an outage cannot change one.
 numpy==2.4.6
 onnxruntime==1.27.0
 tokenizers==0.23.1
 
-# LLM audit layer
+# --- LLM audit layer -------------------------------------------------------------
+# The only outbound model API. Keys come from .env plus gemini_keys.json, pooled and
+# rotated by gemini_keys.py.
 google-genai==2.16.0
 pydantic==2.13.4
 
-# Scraping and configuration
+# --- Scraping and configuration --------------------------------------------------
 requests==2.34.2
 python-dotenv==1.2.2
 
-# --- Retired, kept installable -------------------------------------------------
-# The pipeline now stores everything in skills_master.json and skills_timeseries.json,
-# so none of the below is imported by the running system. They are still required by
-# unused/fastapi_main.py, database.py, score.py and migrate_sql_to_json.py, which stay
-# on disk so the SQL path remains available and the migration can be re-run.
-fastapi==0.141.1
-uvicorn==0.52.0
-Jinja2==3.1.6
-python-multipart==0.0.32   # FastAPI Form() parsing in the old review endpoints
-pyodbc==5.3.0              # requires the ODBC Driver 18 for SQL Server system package
+# --- Retired, kept installable ---------------------------------------------------
+# Nothing under archive/ is imported by the running system, and archive/ is never on
+# sys.path. These are pinned only so the archived code stays runnable if it is ever
+# consulted. Removing them will not affect the app.
+streamlit==1.60.0          # archive/unused/app_interface_streamlit.py, app_interface.py
+plotly==6.9.0              # archive/unused/app_interface_streamlit.py
+pandas==3.0.5              # archive/unused/app_interface*.py
+pyodbc==5.3.0              # archive/sql_era/*; needs the ODBC Driver 18 system package
