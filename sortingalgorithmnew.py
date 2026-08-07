@@ -28,12 +28,16 @@ import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 
+import storage
+
 logger = logging.getLogger(__name__)
 
-BI_MODEL_PATH = "model.onnx"
-TOKENIZER_PATH = "tokenizer.json"
+BI_MODEL_PATH = storage.model_path(storage.BI_MODEL_NAME)
+TOKENIZER_PATH = storage.model_path(storage.TOKENIZER_NAME)
 
 EMBEDDING_DIM = 384
+# cross_encoder.py carries its own 256 for the cross-encoder. See the note there: two
+# independent session configs that happen to agree, deliberately not shared.
 MAX_SEQUENCE_LENGTH = 256
 
 # --- Absolute bucket thresholds, applied to the RAW cosine score only ---------

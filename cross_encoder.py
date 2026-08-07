@@ -17,11 +17,17 @@ import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 
+import storage
+
 logger = logging.getLogger(__name__)
 
-CROSS_MODEL_PATH = "cross_encoder_model.onnx"
-TOKENIZER_PATH = "tokenizer.json"
+CROSS_MODEL_PATH = storage.model_path(storage.CROSS_MODEL_NAME)
+TOKENIZER_PATH = storage.model_path(storage.TOKENIZER_NAME)
 
+# Paired with strategy="longest_first" below, which trims the long candidate page and
+# never the short skill name. sortingalgorithmnew.py carries its own 256 for the
+# bi-encoder; the two agree today but are independent session configs, and coupling
+# them would mean swapping one model silently retunes the other.
 MAX_SEQUENCE_LENGTH = 256
 
 if not os.path.exists(CROSS_MODEL_PATH):

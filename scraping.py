@@ -20,7 +20,6 @@ Rate-limit discipline:
     is what keeps per-skill request counts in single digits.
 """
 
-import json
 import logging
 import os
 import re
@@ -31,6 +30,7 @@ from urllib.parse import quote, unquote, urlparse
 import requests
 from dotenv import load_dotenv
 
+import storage
 from agentic_source_check import AuditUnavailable, get_source_checker
 from cross_encoder import score_pair
 
@@ -41,7 +41,7 @@ load_dotenv()
 TOKEN = os.getenv("CAREERONESTOP_TOKEN", "").strip().replace(";", "")
 USER_ID = os.getenv("CAREERONESTOP_USER_ID", "").strip()
 USER_AGENT = os.getenv("USER_AGENT", "AISkillsAnalyticsDashboard/1.0")
-CACHE_FILE = os.getenv("CACHE_FILE", "wikipedia_skills_cache.json")
+CACHE_FILE = storage.CACHE_FILE
 
 # A candidate page must reach this score for Gemini to audit it. Below it, the
 # skill goes to human review with the raw extract attached and no API call spent.
@@ -101,14 +101,20 @@ EXACT_HARD_MAPPINGS = {
 # --------------------------------------------------------------------------
 
 def load_local_cache() -> Dict[str, Any]:
-    """Loads the scrape cache, discarding entries from an older schema version."""
-    if not os.path.exists(CACHE_FILE):
-        return {}
+    """
+    Loads the scrape cache, discarding entries from an older schema version.
+
+    The version filter stays HERE rather than moving to storage.py: it encodes which
+    candidate-resolution strategy produced an entry, which is a scraping fact, not a
+    storage one.
+    """
     try:
-        with open(CACHE_FILE, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except (OSError, ValueError) as err:
+        raw = storage.load_scrape_cache_raw()
+    except storage.StorageUnreadable as err:
         logger.warning("Could not read scrape cache %s (%s). Starting empty.", CACHE_FILE, err)
+        return {}
+
+    if not isinstance(raw, dict):
         return {}
 
     kept = {
@@ -124,8 +130,7 @@ def load_local_cache() -> Dict[str, Any]:
 
 def save_local_cache(cache_data: Dict[str, Any]) -> None:
     try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as handle:
-            json.dump(cache_data, handle, indent=4, ensure_ascii=False)
+        storage.save_scrape_cache_raw(cache_data)
     except OSError as err:
         logger.warning("Could not write scrape cache %s (%s).", CACHE_FILE, err)
 

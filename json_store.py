@@ -8,22 +8,27 @@ read that silently swallows corruption and hands back an empty dict.
     skills_master.json      object keyed by skill name; upserted every run
     skills_timeseries.json  flat list of snapshots; one record per (skill, quarter)
 
-Every module that touches those files goes through here. Three modules read them
-(definitions_algorithm, dashboardtables, app_interface) and two write them, and
-duplicating the atomic-write dance in each is how the two files drift apart.
+Every module that touches those files goes through here. Four modules read them
+(definitions_algorithm, dashboardtables, review_actions, second_pass) and three write
+them, and duplicating the atomic-write dance in each is how the two files drift apart.
+
+This module owns what a skill RECORD is: the upsert rules, the never-regress
+invariants, the occupations upgrade. It no longer owns where the bytes live -- that is
+storage.py, which every I/O call below delegates to. The split is what lets the store
+move to Cloud SQL without any of the record logic here noticing.
 """
 
 import datetime
-import json
 import logging
-import os
-import tempfile
 from typing import Any, Dict, List
+
+import storage
 
 logger = logging.getLogger(__name__)
 
-MASTER_FILE = os.getenv("SKILLS_MASTER_FILE", "skills_master.json")
-TIMESERIES_FILE = os.getenv("SKILLS_TIMESERIES_FILE", "skills_timeseries.json")
+# Re-exported from storage so existing callers and log lines keep working unchanged.
+MASTER_FILE = storage.MASTER_FILE
+TIMESERIES_FILE = storage.TIMESERIES_FILE
 
 # Review states a master entry can hold. Strings rather than the SQL integers,
 # because a JSON file is read by humans and `"status": -2` explains nothing.
@@ -47,52 +52,54 @@ class StoreCorrupted(RuntimeError):
 # Low-level IO
 # --------------------------------------------------------------------------
 
-def _read_json(path: str, default):
-    """Reads a JSON file, tolerating absence but never corruption."""
-    if not os.path.exists(path):
+# Distinguishes "the store has never been written" from "the store holds null". Only
+# the former is a normal first run; storage returns None for both, so the sentinel is
+# what keeps the two apart.
+_MISSING = object()
+
+
+def _loaded(raw, path: str, default):
+    """
+    Turns a storage read into a value, reporting absence exactly as before.
+
+    Absence is normal and logged at INFO; corruption never reaches here, because
+    storage raises and the callers below translate that into StoreCorrupted.
+    """
+    if raw is None:
         logger.info("%s does not exist yet; starting from empty.", path)
         return default
+    return raw
 
+
+def _read_json(path: str, default):
+    """
+    Reads a JSON file, tolerating absence but never corruption.
+
+    Kept as a private generic for any caller that needs a one-off read against the
+    store's failure policy. The two real stores use storage's named helpers instead.
+    """
     try:
-        with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
-    except (ValueError, UnicodeDecodeError) as err:
+        raw = storage.read_json(path, default=_MISSING)
+    except storage.StorageUnreadable as err:
         raise StoreCorrupted(
-            f"{path} exists but is not valid JSON ({err}). Refusing to continue and "
+            f"{path} exists but could not be read ({err}). Refusing to continue and "
             f"overwrite it. Inspect or delete the file, then re-run."
         ) from err
-    except OSError as err:
-        raise StoreCorrupted(f"{path} could not be read: {err}") from err
+    if raw is _MISSING:
+        logger.info("%s does not exist yet; starting from empty.", path)
+        return default
+    return raw
 
 
 def atomic_write(path: str, payload) -> None:
     """
     Writes JSON so that the file on disk is either the old content or the new one.
 
-    Serializes to a temp file in the SAME directory (os.replace is only atomic within
-    a filesystem), flushes and fsyncs so the bytes are really on disk before the
-    rename, then replaces. A crash at any point leaves the previous file intact.
+    Now a thin alias over storage.write_json, which holds the temp-file-and-replace
+    dance. Kept under this name because it is part of this module's published surface;
+    the keywords below reproduce the exact bytes this function used to emit.
     """
-    directory = os.path.dirname(os.path.abspath(path)) or "."
-    handle = tempfile.NamedTemporaryFile(
-        mode="w", encoding="utf-8", dir=directory, prefix=".tmp_", suffix=".json",
-        delete=False,
-    )
-    temp_path = handle.name
-    try:
-        with handle:
-            json.dump(payload, handle, indent=2, ensure_ascii=False, sort_keys=True)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.replace(temp_path, path)
-    except Exception:
-        # Never leave the temp file behind on failure; the directory would silently
-        # fill with .tmp_*.json across failed runs.
-        try:
-            os.unlink(temp_path)
-        except OSError:
-            pass
-        raise
+    storage.write_json(path, payload, indent=2, ensure_ascii=False, sort_keys=True)
 
 
 # --------------------------------------------------------------------------
@@ -149,7 +156,14 @@ def load_master() -> Dict[str, Any]:
     loading is a read, and a read that rewrites the file would make every dashboard
     render a disk write. The next save persists it.
     """
-    data = _read_json(MASTER_FILE, {})
+    try:
+        data = _loaded(storage.load_master_raw(), MASTER_FILE, {})
+    except storage.StorageUnreadable as err:
+        raise StoreCorrupted(
+            f"{MASTER_FILE} exists but could not be read ({err}). Refusing to continue "
+            f"and overwrite it. Inspect or delete the file, then re-run."
+        ) from err
+
     if not isinstance(data, dict):
         raise StoreCorrupted(
             f"{MASTER_FILE} should hold a JSON object keyed by skill name, "
@@ -173,13 +187,20 @@ def load_master() -> Dict[str, Any]:
 
 
 def save_master(master: Dict[str, Any]) -> None:
-    atomic_write(MASTER_FILE, master)
+    storage.save_master_raw(master)
     logger.info("Wrote %d skills to %s.", len(master), MASTER_FILE)
 
 
 def load_timeseries() -> List[Dict[str, Any]]:
     """Loads skills_timeseries.json as a flat list of snapshot records."""
-    data = _read_json(TIMESERIES_FILE, [])
+    try:
+        data = _loaded(storage.load_timeseries_raw(), TIMESERIES_FILE, [])
+    except storage.StorageUnreadable as err:
+        raise StoreCorrupted(
+            f"{TIMESERIES_FILE} exists but could not be read ({err}). Refusing to "
+            f"continue and overwrite it. Inspect or delete the file, then re-run."
+        ) from err
+
     if not isinstance(data, list):
         raise StoreCorrupted(
             f"{TIMESERIES_FILE} should hold a JSON array of snapshots, "
@@ -189,7 +210,7 @@ def load_timeseries() -> List[Dict[str, Any]]:
 
 
 def save_timeseries(records: List[Dict[str, Any]]) -> None:
-    atomic_write(TIMESERIES_FILE, records)
+    storage.save_timeseries_raw(records)
     logger.info("Wrote %d snapshots to %s.", len(records), TIMESERIES_FILE)
 
 

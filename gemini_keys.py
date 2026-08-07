@@ -21,19 +21,20 @@ of live secrets; a second one would be a second thing to leak.
 
 import datetime
 import hashlib
-import json
 import logging
 import os
 from typing import List, Optional
 
 from dotenv import load_dotenv
 
+import storage
+
 logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-KEYS_FILE = os.getenv("GEMINI_KEYS_FILE", "gemini_keys.json")
-STATE_FILE = os.getenv("GEMINI_KEY_STATE_FILE", "gemini_key_state.json")
+KEYS_FILE = storage.GEMINI_KEYS_FILE
+STATE_FILE = storage.GEMINI_KEY_STATE_FILE
 
 ENV_KEY_LABEL = "env:GEMINI_API_KEY"
 
@@ -68,17 +69,16 @@ def _load_key_file() -> List[dict]:
     the file can be written the obvious way and still carry names that make the log
     readable. A missing file is normal -- it means only the .env key is configured.
     """
-    if not os.path.exists(KEYS_FILE):
-        return []
-
     try:
-        with open(KEYS_FILE, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except (ValueError, OSError):
+        raw = storage.load_gemini_keys_raw()
+    except storage.StorageUnreadable:
         # Loud, not silent: a malformed key file would otherwise look identical to
         # "no spare keys configured", and the first quota wall would stop the run
         # with no hint that four perfectly good keys were sitting unread on disk.
         logger.exception("%s could not be read. Falling back to the .env key only.", KEYS_FILE)
+        return []
+
+    if raw is None:
         return []
 
     # Some editors leave a top-level {"keys": [...]} wrapper; accept it rather than
@@ -112,14 +112,14 @@ def _load_state() -> dict:
     A stale file is not an error, it is the normal signal that the quota reset.
     """
     today = datetime.date.today().isoformat()
-    if not os.path.exists(STATE_FILE):
-        return {"date": today, "exhausted": []}
 
     try:
-        with open(STATE_FILE, "r", encoding="utf-8") as handle:
-            state = json.load(handle)
-    except (ValueError, OSError):
+        state = storage.load_gemini_key_state_raw()
+    except storage.StorageUnreadable:
         logger.warning("%s is unreadable; treating every key as available.", STATE_FILE)
+        return {"date": today, "exhausted": []}
+
+    if not isinstance(state, dict):
         return {"date": today, "exhausted": []}
 
     if state.get("date") != today:
@@ -135,8 +135,7 @@ def _load_state() -> dict:
 
 def _save_state(state: dict) -> None:
     try:
-        with open(STATE_FILE, "w", encoding="utf-8") as handle:
-            json.dump(state, handle, indent=2)
+        storage.save_gemini_key_state_raw(state)
     except OSError:
         # Not fatal. Losing the state means retrying a spent key on the next run,
         # which costs one 429 -- far better than aborting a working run.

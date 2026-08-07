@@ -17,20 +17,19 @@ the 90-day freshness rule and the scrape cache skip everything already finished,
 tracking half-finished occupations at skill level would be a second, subtler store to
 keep in agreement with the first.
 
-Writes reuse json_store.atomic_write so a crash cannot leave a truncated backlog -- the
-one file whose loss would silently drop queued work.
+Writes go through storage.save_backlog_raw, which is atomic, so a crash cannot leave a
+truncated backlog -- the one file whose loss would silently drop queued work.
 """
 
 import datetime
 import logging
-import os
 from typing import Any, Dict, List
 
-from json_store import atomic_write
+import storage
 
 logger = logging.getLogger(__name__)
 
-BACKLOG_FILE = os.getenv("INGESTION_BACKLOG_FILE", "ingestion_backlog.json")
+BACKLOG_FILE = storage.BACKLOG_FILE
 
 REASON_QUOTA = "gemini_daily_quota_exhausted"
 REASON_REQUESTED = "requested"
@@ -49,15 +48,13 @@ def load_backlog() -> Dict[str, Any]:
     a handful of O*NET codes; refusing to start the app over it would be a worse trade.
     It is still logged as an error rather than passed over.
     """
-    if not os.path.exists(BACKLOG_FILE):
+    try:
+        data = storage.load_backlog_raw()
+    except storage.StorageUnreadable:
+        logger.exception("%s could not be read. Starting with an empty backlog.", BACKLOG_FILE)
         return _empty()
 
-    try:
-        import json
-        with open(BACKLOG_FILE, "r", encoding="utf-8") as handle:
-            data = json.load(handle)
-    except (ValueError, OSError):
-        logger.exception("%s could not be read. Starting with an empty backlog.", BACKLOG_FILE)
+    if data is None:
         return _empty()
 
     if not isinstance(data, dict) or not isinstance(data.get("targets"), list):
@@ -74,7 +71,7 @@ def load_backlog() -> Dict[str, Any]:
 
 def save_backlog(backlog: Dict[str, Any]) -> None:
     backlog["updated"] = datetime.date.today().isoformat()
-    atomic_write(BACKLOG_FILE, backlog)
+    storage.save_backlog_raw(backlog)
 
 
 def is_empty() -> bool:

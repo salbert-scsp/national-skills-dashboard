@@ -15,11 +15,10 @@ were re-derived here from anything the UI had already normalized, a skill's clas
 would change as the user filtered.
 """
 
-import json
 import logging
-import os
 from typing import Any, Dict, List
 
+import storage
 from json_store import (
     STATUS_APPROVED,
     STATUS_PENDING,
@@ -38,7 +37,7 @@ from sortingalgorithmnew import (
 
 logger = logging.getLogger(__name__)
 
-EXPORT_FILE = os.getenv("DASHBOARD_EXPORT_FILE", "dashboard_export.json")
+EXPORT_FILE = storage.EXPORT_FILE
 
 # Fixed display order. Counting with a dict built from the data would order buckets
 # by whichever happened to appear first, and the legend would reshuffle between runs.
@@ -354,13 +353,15 @@ def export_dashboard_json(path: str = None) -> str:
     """
     Writes the flattened payload to a standalone file.
 
-    Not needed by the Streamlit app, which calls load_dashboard() directly. This
-    exists for handing a single self-contained artifact to something else.
+    Not needed by the web app, which calls load_dashboard() directly. This exists for
+    handing a single self-contained artifact to something else.
+
+    Written atomically, unlike the raw open() this replaced: a crash part-way through
+    used to leave a truncated export behind that still looked like a valid file.
     """
     path = path or EXPORT_FILE
     payload = load_dashboard()
-    with open(path, "w", encoding="utf-8") as handle:
-        json.dump(payload, handle, indent=2, ensure_ascii=False)
+    storage.save_dashboard_export(path, payload)
     logger.info("Exported %d skills to %s.", len(payload["skills"]), path)
     return path
 
