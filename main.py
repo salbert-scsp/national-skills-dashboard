@@ -35,6 +35,7 @@ import json
 import logging
 import os
 import re
+import threading
 from contextlib import asynccontextmanager
 from urllib.parse import quote
 
@@ -451,6 +452,8 @@ def render_review_queue(
     ingest_err: str = None,
     second_pass_ok: str = None,
     sp_count: str = None,
+    scrape_ok: str = None,
+    scrape_err: str = None,
 ):
     """
     Renders one page of the pending review queue.
@@ -518,6 +521,11 @@ def render_review_queue(
             "ingest_err": ", ".join(parse_ingest_targets(ingest_err)[1]) if ingest_err else "",
             # Queued work from an interrupted or quota-stopped run.
             "backlog": _backlog_status(),
+            # Both looked up in fixed tables, never reflected, so a hand-edited query
+            # string cannot put chosen text on the page.
+            "scrape_ok": SCRAPE_MESSAGES.get(scrape_ok) if scrape_ok else None,
+            "scrape_err": SCRAPE_ERRORS.get(scrape_err) if scrape_err else None,
+            "scrape": run_state.snapshot(),
             "second_pass_ok": second_pass_message,
             "second_pass_err": "",
             "edit_message": edit_message,
@@ -755,11 +763,24 @@ def _run_ingestion(targets: list) -> None:
 
     backlog_store.add_targets(targets, reason=backlog_store.REASON_REQUESTED)
 
+    # Serialized against every other background writer of the store. Without this, two
+    # writers doing load_master -> mutate -> save_master concurrently means the one that
+    # saves last silently erases the other's work, including any approvals a reviewer
+    # made in between.
+    if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
+        logger.warning(
+            "Another background job is writing the store, so this ingestion is not "
+            "starting. Its targets stay queued and the next run picks them up."
+        )
+        return
+
     try:
         result = run_backlog()
     except Exception:
         logger.exception("Background ingestion failed for %s.", ", ".join(targets))
         return
+    finally:
+        run_state.STORE_WRITER_LOCK.release()
 
     if result.get("quota_exhausted"):
         logger.error(
@@ -786,11 +807,26 @@ def _run_second_pass(limit: int, apply_mode: str) -> None:
     """
     from second_pass import run_second_pass
 
+    # Same exclusion as ingestion, and the reason the lock exists at all. A second pass
+    # running alongside a multi-day scrape would have both of them loading, mutating
+    # and saving the whole store; whichever finished last would discard the other.
+    #
+    # Refused rather than queued: a scrape runs for days, and a job that "waits" for
+    # days is a job nobody knows is waiting.
+    if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
+        logger.warning(
+            "A scrape is running and holds the store, so the second pass did not "
+            "start. Nothing was changed. Pause the scrape, or wait for it to finish."
+        )
+        return
+
     try:
         result = run_second_pass(limit=limit, apply_mode=apply_mode)
     except Exception:
         logger.exception("Background second pass failed.")
         return
+    finally:
+        run_state.STORE_WRITER_LOCK.release()
 
     if result.get("quota_exhausted"):
         logger.error(
@@ -944,6 +980,215 @@ def handle_ingest_form(background_tasks: BackgroundTasks, onet_code: str = Form(
         )
 
     return RedirectResponse(url="/", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# The scrape panel
+# ---------------------------------------------------------------------------
+
+SCRAPE_ERRORS = {
+    "already_running": "A scrape is already running. Pause it before starting another.",
+    "busy": "Another background job is writing the store right now. Try again shortly.",
+    "nothing_queued": "There is nothing queued to resume. Start a scrape instead.",
+    "not_running": "Nothing is running, so there was nothing to pause.",
+    "confirm": "Type DISCARD in the box to confirm. Nothing was changed.",
+}
+
+SCRAPE_MESSAGES = {
+    "started": "Scrape started. Planning takes about thirty seconds before the bar moves.",
+    "resumed": "Resumed. The bar picks up where it left off.",
+    "pausing": "Pausing. The occupation in flight will finish first, which takes a minute or so.",
+    "discarded": "Queue discarded. Nothing already ingested was touched.",
+}
+
+
+def _scrape_worker(scope: str, force: bool) -> None:
+    """
+    Runs a full scrape on its own thread until it finishes, stalls, or is paused.
+
+    NOT a BackgroundTask. Those run on the same capped anyio threadpool that serves
+    requests, and a job measured in weeks would hold one of those slots for the whole
+    time. A dedicated thread costs one thread and takes nothing from request handling.
+
+    Planning happens HERE rather than in the POST handler because it is 23 network
+    calls and about thirty seconds; a request that did it inline would look hung. The
+    panel shows a "planning" state for that window.
+    """
+    from definitions_algorithm import plan_full_scrape, run_backlog
+
+    final_state = run_state.FINISHED
+    error = None
+
+    try:
+        # The store lock is held for the WHOLE run, so a second pass cannot start
+        # underneath it and discard its work. Acquired after the run slot is claimed,
+        # in the same order everywhere, so the two locks cannot deadlock.
+        if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
+            logger.error("Another background job holds the store; the scrape did not start.")
+            run_state.release(run_state.IDLE, error="another job held the store")
+            return
+
+        try:
+            if scope == "full":
+                plan = plan_full_scrape()
+                run_state.set_total(plan["total"], baseline=plan["baseline"])
+                logger.warning(
+                    "Full scrape planned: %d occupations across %d SOC groups. This "
+                    "runs for weeks of daily quota, not hours.",
+                    plan["total"], len(plan["prefixes"]),
+                )
+            else:
+                # Resume: whatever is already queued is the plan. The total is what is
+                # owed right now, so the bar starts at zero and fills across this run.
+                queued = len(backlog_store.target_list())
+                run_state.set_total(queued, baseline=0)
+                logger.info("Resuming a scrape over %d queued occupation(s).", queued)
+
+            result = run_backlog(
+                force=force,
+                progress=run_state.on_event,
+                should_continue=run_state.should_continue,
+            )
+
+            if result.get("quota_exhausted"):
+                final_state = run_state.QUOTA_STOPPED
+                logger.error(
+                    "ALL GEMINI TOKENS EXHAUSTED FOR TODAY. %d occupation(s) remain "
+                    "queued and resume tomorrow. Nothing was written unaudited.",
+                    result.get("remaining", 0),
+                )
+            elif result.get("stopped"):
+                final_state = run_state.PAUSED
+            else:
+                final_state = run_state.FINISHED
+        finally:
+            run_state.STORE_WRITER_LOCK.release()
+
+    except Exception as err:
+        # Any escape leaves the run slot claimed forever and wedges the button, so the
+        # release below is unconditional and this only records what happened.
+        final_state = run_state.INTERRUPTED
+        error = str(err)
+        logger.exception("The scrape thread failed.")
+    finally:
+        run_state.release(final_state, error=error)
+
+
+def _spawn_scrape(scope: str, force: bool = False) -> None:
+    """
+    Starts the worker on a daemon thread.
+
+    daemon=True so Ctrl-C still exits the server. The cost is that the occupation in
+    flight is abandoned without its finally block -- at most one occupation's work,
+    which is still queued on the backlog because remove_target only fires after a
+    successful save.
+    """
+    threading.Thread(
+        target=_scrape_worker, args=(scope, force), name="scrape-worker", daemon=True
+    ).start()
+
+
+@app.post("/admin/scrape/start")
+def handle_scrape_start(scope: str = Form("full")):
+    """
+    Claims the run slot and starts a full scrape.
+
+    The claim is a compare-and-set, so two people clicking at the same moment produce
+    one run and one clear refusal rather than two runs racing over the store.
+    """
+    if scope != "full":
+        scope = "full"
+
+    run_id = run_state.try_claim("All 23 SOC major groups")
+    if run_id is None:
+        return RedirectResponse(url="/?scrape_err=already_running", status_code=303)
+
+    logger.warning("Full scrape requested from the web UI (run %s).", run_id)
+    _spawn_scrape("full")
+    return RedirectResponse(url="/?scrape_ok=started", status_code=303)
+
+
+@app.post("/admin/scrape/resume")
+def handle_scrape_resume():
+    """Drains whatever is still queued, without re-planning."""
+    if backlog_store.is_empty():
+        return RedirectResponse(url="/?scrape_err=nothing_queued", status_code=303)
+
+    run_id = run_state.try_claim("Resuming queued occupations")
+    if run_id is None:
+        return RedirectResponse(url="/?scrape_err=already_running", status_code=303)
+
+    logger.info("Scrape resumed from the web UI (run %s).", run_id)
+    _spawn_scrape("resume")
+    return RedirectResponse(url="/?scrape_ok=resumed", status_code=303)
+
+
+@app.post("/admin/scrape/pause")
+def handle_scrape_pause():
+    """
+    Asks the worker to stop after the occupation it is in.
+
+    Returns immediately; the worker may take a minute to reach the boundary. Everything
+    unfinished is already on the backlog, so nothing is lost in the meantime.
+    """
+    if not run_state.request_stop():
+        return RedirectResponse(url="/?scrape_err=not_running", status_code=303)
+    return RedirectResponse(url="/?scrape_ok=pausing", status_code=303)
+
+
+@app.post("/admin/scrape/discard")
+def handle_scrape_discard(confirm: str = Form("")):
+    """
+    Empties the queue of planned occupations.
+
+    Behind a typed confirmation because it throws away a plan that cost 23 network
+    calls and, once a run is underway, represents weeks of intended work. It does not
+    touch anything already ingested.
+    """
+    if confirm.strip().upper() != "DISCARD":
+        return RedirectResponse(url="/?scrape_err=confirm", status_code=303)
+
+    count = len(backlog_store.target_list())
+    backlog_store.clear_backlog()
+    logger.warning("Discarded %d queued occupation(s) from the web UI.", count)
+    return RedirectResponse(url="/?scrape_ok=discarded", status_code=303)
+
+
+@app.get("/admin/progress", response_class=HTMLResponse)
+def render_progress_fragment(request: Request):
+    """
+    The progress panel, as its own tiny page for embedding in an iframe.
+
+    Separate document rather than part of the review page because it refreshes itself
+    every few seconds while a run is live. Refreshing review.html instead would wipe
+    half-typed corrections out of the textareas in the queue below and reset scroll,
+    every five seconds, for as long as the scrape runs.
+    """
+    status = run_state.snapshot()
+    return templates.TemplateResponse(
+        request,
+        "_progress.html",
+        {
+            "status": status,
+            "quota_reset": _quota_reset_note(),
+            "queue_size": status.get("queued", 0),
+        },
+    )
+
+
+def _quota_reset_note() -> dict:
+    """
+    The date the daily Gemini quota resets, which is always tomorrow.
+
+    Formatted here rather than in Jinja because strftime("%-d") is not portable off
+    glibc and BSD. A date only, never a time: Gemini's free-tier window is Pacific and
+    this machine may not be, so the hour would be a guess dressed as a fact.
+    """
+    tomorrow = run_state.quota_reset_date()
+    return {
+        "date": tomorrow.isoformat(),
+        "label": f"{tomorrow.strftime('%A')}, {tomorrow.strftime('%B')} {tomorrow.day}",
+    }
 
 
 if __name__ == "__main__":

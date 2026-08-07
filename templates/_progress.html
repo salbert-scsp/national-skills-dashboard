@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scrape progress</title>
+    <link rel="stylesheet" href="/static/style.css">
+    {#
+        The refresh is conditional, and that is the whole design. While a run is live
+        this fragment reloads itself every five seconds; when nothing is running it is
+        a static page that costs nothing. The parent review page never reloads either
+        way, so a reviewer can type a correction into the queue below for as long as
+        the scrape takes without losing a keystroke.
+    #}
+    {% if status.running %}<meta http-equiv="refresh" content="5">{% endif %}
+</head>
+<body class="progressframe">
+
+{# ----------------------------------------------------------------------- #}
+{# PLANNING: the slot is claimed but select_onet_codes has not returned yet. #}
+{# Without this state the first thirty seconds after the click look broken.  #}
+{# ----------------------------------------------------------------------- #}
+{% if status.planning %}
+    <div class="notice notice--ok">
+        <strong>Planning the run.</strong>
+        Asking O*NET how many occupations are in each of the 23 SOC groups. This takes
+        about thirty seconds, and the bar starts moving when it finishes.
+    </div>
+    <div class="adminpanel__meter" role="progressbar" aria-valuetext="Planning">
+        <span class="adminpanel__fill adminpanel__fill--indeterminate"></span>
+    </div>
+
+{# ----------------------------------------------------------------------- #}
+{# RUNNING                                                                  #}
+{# ----------------------------------------------------------------------- #}
+{% elif status.running %}
+    <div class="adminpanel__meter" role="progressbar"
+         aria-valuemin="0" aria-valuemax="{{ status.total }}"
+         aria-valuenow="{{ status.completed }}">
+        <span class="adminpanel__fill" style="width: {{ status.percent }}%;"></span>
+    </div>
+    <p class="adminpanel__count mono">
+        {{ "{:,}".format(status.completed) }} of {{ "{:,}".format(status.total) }}
+        occupations &middot; {{ status.percent }}%
+    </p>
+    {% if status.current_target %}
+        <p class="muted">
+            Now: <span class="mono">{{ status.current_target }}</span>
+            {%- if status.current_title %} {{ status.current_title }}{% endif %}
+        </p>
+    {% endif %}
+
+    {% if status.counts %}
+        <div class="stats adminpanel__stats">
+            {% for label, key in [("Tools seen", "tools"), ("Hot", "hot"),
+                                  ("Scraped", "scraped"), ("Approved", "approved"),
+                                  ("To review", "pending")] %}
+                <div class="stat">
+                    <div class="stat__value">{{ "{:,}".format(status.counts.get(key, 0)) }}</div>
+                    <div class="stat__label">{{ label }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <p class="muted">
+        This runs for weeks of daily quota, not hours. You can close this page; it keeps
+        going until the server stops.
+    </p>
+
+    <form action="/admin/scrape/pause" method="POST" target="_top">
+        <button type="submit" style="width: 100%;">Pause after this occupation</button>
+    </form>
+
+{# ----------------------------------------------------------------------- #}
+{# QUOTA STOPPED -- the red note, with the date tokens come back            #}
+{# ----------------------------------------------------------------------- #}
+{% elif status.state == "quota_stopped" %}
+    <div class="notice notice--error">
+        <strong>All Gemini keys hit their daily limit.</strong>
+        <br>
+        Tokens refresh tomorrow, <strong>{{ quota_reset.label }}</strong>.
+        {% if status.total %}
+            {{ "{:,}".format(status.completed) }} of {{ "{:,}".format(status.total) }}
+            occupations are done;
+        {% endif %}
+        the remaining {{ "{:,}".format(queue_size) }} stay queued and resume exactly
+        where they stopped. Nothing was written unaudited, and nothing extra is waiting
+        in the review queue because of it.
+    </div>
+    {% if status.total %}
+        <div class="adminpanel__meter" role="progressbar"
+             aria-valuemin="0" aria-valuemax="{{ status.total }}"
+             aria-valuenow="{{ status.completed }}">
+            <span class="adminpanel__fill" style="width: {{ status.percent }}%;"></span>
+        </div>
+    {% endif %}
+    <p class="muted">
+        Resuming today would meet the same wall. Come back on {{ quota_reset.label }}.
+    </p>
+    <form action="/admin/scrape/resume" method="POST" target="_top">
+        <button type="submit" style="width: 100%;">Resume anyway</button>
+    </form>
+
+{# ----------------------------------------------------------------------- #}
+{# PAUSED                                                                   #}
+{# ----------------------------------------------------------------------- #}
+{% elif status.state == "paused" %}
+    <div class="notice notice--warn">
+        <strong>Paused{% if status.total %} after {{ "{:,}".format(status.completed) }}
+        of {{ "{:,}".format(status.total) }}{% endif %}.</strong>
+        The remaining {{ "{:,}".format(queue_size) }} occupations stay queued. Nothing
+        is lost, and resuming picks up at the next one rather than starting over.
+    </div>
+    {% if status.total %}
+        <div class="adminpanel__meter">
+            <span class="adminpanel__fill" style="width: {{ status.percent }}%;"></span>
+        </div>
+    {% endif %}
+    <form action="/admin/scrape/resume" method="POST" target="_top">
+        <button type="submit" class="primary" style="width: 100%;">Resume</button>
+    </form>
+    {% include "_discard.html" %}
+
+{# ----------------------------------------------------------------------- #}
+{# INTERRUPTED -- the server stopped mid-run                                #}
+{# ----------------------------------------------------------------------- #}
+{% elif status.state == "interrupted" %}
+    <div class="notice notice--warn">
+        <strong>The last run stopped when the server did.</strong>
+        {{ "{:,}".format(queue_size) }} occupations are still queued. At most the one
+        that was in flight gets redone, and that is nearly free because its pages are
+        already cached.
+    </div>
+    <form action="/admin/scrape/resume" method="POST" target="_top">
+        <button type="submit" class="primary" style="width: 100%;">Resume</button>
+    </form>
+    {% include "_discard.html" %}
+
+{# ----------------------------------------------------------------------- #}
+{# IDLE                                                                     #}
+{# ----------------------------------------------------------------------- #}
+{% elif queue_size %}
+    <div class="notice notice--warn">
+        <strong>{{ "{:,}".format(queue_size) }} occupation(s) are queued</strong> from an
+        earlier run and have not been ingested yet.
+    </div>
+    <form action="/admin/scrape/resume" method="POST" target="_top">
+        <button type="submit" class="primary" style="width: 100%;">Resume the queue</button>
+    </form>
+    {% include "_discard.html" %}
+
+{% else %}
+    <p class="muted adminpanel__idle">
+        Nothing running.
+        {% if status.state == "finished" %}The last run finished.{% endif %}
+    </p>
+{% endif %}
+
+</body>
+</html>

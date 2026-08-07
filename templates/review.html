@@ -36,6 +36,49 @@
     </header>
 
     <div class="wrap">
+        <!--
+            The headline admin control. Sits above the finer-grained tools below it
+            because it is the one a non-technical operator is looking for: it replaces
+            typing prefixes into a terminal.
+        -->
+        <section class="card adminpanel">
+            <div class="adminpanel__hero">
+                <h2>Scrape all O*NET skills</h2>
+                <p class="muted">
+                    Every occupation in all 23 SOC major groups, roughly 900 of them.
+                    This is a multi-week job: it will meet the daily Gemini limit many
+                    times and resume the next day each time.
+                </p>
+
+                <form action="/admin/scrape/start" method="POST">
+                    <input type="hidden" name="scope" value="full">
+                    <button type="submit" class="primary adminpanel__go"
+                            {% if scrape.running %}disabled{% endif %}>
+                        Scrape Skills
+                    </button>
+                </form>
+
+                {% if scrape_err %}
+                    <div class="notice notice--error" style="margin-top: 12px;">{{ scrape_err }}</div>
+                {% elif scrape_ok %}
+                    <div class="notice notice--ok" style="margin-top: 12px;">{{ scrape_ok }}</div>
+                {% endif %}
+            </div>
+
+            <!--
+                Progress lives in an iframe that refreshes itself while a run is live.
+                Refreshing this page instead would wipe half-typed corrections out of
+                the review textareas below, every five seconds, for weeks.
+            -->
+            <iframe src="/admin/progress" title="Scrape progress"
+                    class="adminpanel__frame" scrolling="no"></iframe>
+
+            <p class="muted" style="margin: 0;">
+                Expect the review queue to grow a long way past its current size. The
+                scrape only adds items; nothing already approved is touched.
+            </p>
+        </section>
+
         <section class="card">
             <div class="card__head">
                 <h3>Ingest O*NET Occupations</h3>

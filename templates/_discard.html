@@ -1,0 +1,23 @@
+{#
+    Discarding the queue. Its own partial because three states offer it and the typed
+    confirmation must not drift between them.
+
+    Behind a typed word rather than a plain button: the queue costs 23 network calls to
+    rebuild and, once a run is underway, represents weeks of intended work. A stray
+    click next to Resume should not be able to throw that away.
+#}
+<form action="/admin/scrape/discard" method="POST" target="_top"
+      style="margin-top: 10px;">
+    <div class="field" style="margin-bottom: 6px;">
+        <label for="discard-confirm">
+            To empty the queue instead, type DISCARD
+        </label>
+        <input type="text" id="discard-confirm" name="confirm" placeholder="DISCARD" />
+    </div>
+    <button type="submit" class="danger" style="width: 100%;">
+        Discard the queued occupations
+    </button>
+    <p class="muted" style="margin: 6px 0 0;">
+        This only clears what is queued. Skills already ingested are untouched.
+    </p>
+</form>
