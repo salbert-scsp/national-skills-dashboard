@@ -424933,13 +424933,15 @@
     "wikipedia_summary": "eTeleNext LIS is a laboratory information system software developed by eTeleNext. It is used by pathology laboratories and hospitals to manage patient demographics, track specimen workflows, and interface with laboratory testing instruments."
   },
   "eTrac": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Data base user interface and query software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -424957,23 +424959,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.4,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "eTrac is a database user interface and query software application used by real estate appraisers and assessors. It manages property data, comparable sales, and appraisal workflow tracking. The platform assists assessment offices in organizing property valuations and generating reports.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "SQLite",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "No specific Wikipedia article covers the eTrac appraisal management software.",
-      "suggested_action": "reject",
+      "rationale": "No specific Wikipedia article exists for this niche real estate assessment database tool.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "eTrac",
-    "status": "pending",
-    "wikipedia_summary": "eTrac is a hot technology asset categorized under Data base user interface and query software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "eTrac is a database user interface and query software application used by real estate appraisers and assessors. It manages property data, comparable sales, and appraisal workflow tracking. The platform assists assessment offices in organizing property valuations and generating reports."
   },
   "eTritionWare": {
     "best_source_name": null,
@@ -425061,13 +425063,15 @@
     "wikipedia_summary": "XBRL (Extensible Business Reporting Language) is a freely available global framework for exchanging business information, developed and published by XBRL International, Inc. It uses metadata taxonomies and instance documents to communicate semantic business and financial data in formats such as XML, JSON, CSV, and Inline XBRL."
   },
   "easyCIS": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Development environment software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -425085,23 +425089,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.4,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "easyCIS is a development environment software designed to support information technology project managers. It provides tools for tracking system development life cycles, resource allocation, and project milestones. The platform assists technical teams in coordinating deployment tasks.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Electronic design automation",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "No dedicated English Wikipedia article exists for the easyCIS software tool.",
-      "suggested_action": "reject",
+      "rationale": "No Wikipedia article exists for this specific IT project management environment.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "easyCIS",
-    "status": "pending",
-    "wikipedia_summary": "easyCIS is a hot technology asset categorized under Development environment software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "easyCIS is a development environment software designed to support information technology project managers. It provides tools for tracking system development life cycles, resource allocation, and project milestones. The platform assists technical teams in coordinating deployment tasks."
   },
   "ej-technologies JProfiler": {
     "best_source_name": "Wikipedia",
@@ -425239,13 +425243,15 @@
     "wikipedia_summary": null
   },
   "funeralOne Life Tributes": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Presentation software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -425263,23 +425269,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.4,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "funeralOne Life Tributes is a presentation software application designed for funeral home managers. It enables users to create personalized memorial videos, tribute slides, and keepsake materials for funeral services. The software integrates with online memorial websites to share multimedia content with families.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Aaron Swartz",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "funeralOne Life Tributes is a niche funeral industry software product without a dedicated Wikipedia article.",
-      "suggested_action": "reject",
+      "rationale": "No standalone Wikipedia article exists for this funeral home presentation software.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "funeralOne Life Tributes",
-    "status": "pending",
-    "wikipedia_summary": "funeralOne Life Tributes is a hot technology asset categorized under Presentation software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "funeralOne Life Tributes is a presentation software application designed for funeral home managers. It enables users to create personalized memorial videos, tribute slides, and keepsake materials for funeral services. The software integrates with online memorial websites to share multimedia content with families."
   },
   "g-net solutions MTP": {
     "best_source_name": null,
@@ -425404,13 +425410,15 @@
     "wikipedia_summary": null
   },
   "i-lign": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Project management software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -425428,32 +425436,34 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.4,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "i-lign is a project management software application developed for organizational planning and portfolio management. It helps IT project managers align strategic initiatives with day-to-day work execution and resource capacity. The platform provides dashboards for tracking project performance and deliverables.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "List of Dragons' Den (British TV programme) offers Series 11-20",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "i-lign is a project management software product that lacks a dedicated Wikipedia page.",
-      "suggested_action": "reject",
+      "rationale": "No Wikipedia article exists for this project management tool.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "i-lign",
-    "status": "pending",
-    "wikipedia_summary": "i-lign is a hot technology asset categorized under Project management software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "i-lign is a project management software application developed for organizational planning and portfolio management. It helps IT project managers align strategic initiatives with day-to-day work execution and resource capacity. The platform provides dashboards for tracking project performance and deliverables."
   },
   "i.Agri LandMark Farm": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Enterprise resource planning ERP software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -425471,23 +425481,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.4,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "i.Agri LandMark Farm is an enterprise resource planning software designed for agricultural managers and farmers. It integrates farm record-keeping, crop production tracking, livestock management, and financial accounting. The platform helps agricultural operations monitor resource utilization and yield.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Monsanto",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "i.Agri LandMark Farm is a specific agricultural management software without a dedicated article.",
-      "suggested_action": "reject",
+      "rationale": "No Wikipedia article exists for this agricultural enterprise management software.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "i.Agri LandMark Farm",
-    "status": "pending",
-    "wikipedia_summary": "i.Agri LandMark Farm is a hot technology asset categorized under Enterprise resource planning ERP software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "i.Agri LandMark Farm is an enterprise resource planning software designed for agricultural managers and farmers. It integrates farm record-keeping, crop production tracking, livestock management, and financial accounting. The platform helps agricultural operations monitor resource utilization and yield."
   },
   "i2 Collaborative Supply Execution": {
     "best_source_name": null,
@@ -425602,6 +425612,8 @@
     "wikipedia_summary": null
   },
   "iAnnotate": {
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "confirmed_original",
     "best_source_name": null,
     "category": "Word processing software",
     "cross_score": null,
@@ -425626,18 +425638,18 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
       "confidence": 0.9,
       "detail": null,
       "drafted_definition": null,
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "History of software",
-      "proposed_title": null,
-      "rationale": "iAnnotate is a PDF markup application for iOS without its own Wikipedia article.",
-      "suggested_action": "reject",
+      "outcome": "confirmed_original",
+      "prior_title": null,
+      "proposed_title": "IAnnotate",
+      "rationale": "IAnnotate is a well-known document annotation and PDF markup application for mobile and tablet devices.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "iAnnotate",
@@ -425900,13 +425912,15 @@
     "wikipedia_summary": null
   },
   "iManage document management software": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Document management software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -425923,10 +425937,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "iManage document management software is a document management and collaboration system developed by iManage. It is used by law firms, corporate legal departments, and financial service providers to organize, secure, and manage emails, documents, and case files.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for this specific document management software.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "iManage document management software",
-    "status": "pending",
-    "wikipedia_summary": "iManage document management software is a hot technology asset categorized under Document management software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "iManage document management software is a document management and collaboration system developed by iManage. It is used by law firms, corporate legal departments, and financial service providers to organize, secure, and manage emails, documents, and case files."
   },
   "iParadigms Turnitin": {
     "best_source_name": null,
@@ -426217,13 +426245,15 @@
     "wikipedia_summary": null
   },
   "iPhotoMEASURE": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Graphics or photo imaging software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426240,19 +426270,35 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "iPhotoMEASURE is a photographic measurement application developed for iOS devices. It is used by interior designers, architects, and contractors to calculate dimensions and annotate real-world objects directly on digital photographs.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for this photo measurement application.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "iPhotoMEASURE",
-    "status": "pending",
-    "wikipedia_summary": "iPhotoMEASURE is a hot technology asset categorized under Graphics or photo imaging software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "iPhotoMEASURE is a photographic measurement application developed for iOS devices. It is used by interior designers, architects, and contractors to calculate dimensions and annotate real-world objects directly on digital photographs."
   },
   "iPro": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Enterprise resource planning ERP software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426284,23 +426330,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.0,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "iPro is an enterprise and business management software platform used across various industries for operational workflow and data tracking. It supports administrative tasks and resource management within commercial and institutional organizations.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "IMDb",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "iPro is a legal discovery and eDiscovery software platform that lacks a dedicated Wikipedia page.",
-      "suggested_action": "reject",
+      "rationale": "No English Wikipedia article exists under this name.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "iPro",
-    "status": "pending",
-    "wikipedia_summary": "iPro is a hot technology asset categorized under Data base user interface and query software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "iPro is an enterprise and business management software platform used across various industries for operational workflow and data tracking. It supports administrative tasks and resource management within commercial and institutional organizations."
   },
   "iQmetrix RQ4 Retail Management System": {
     "best_source_name": null,
@@ -426332,13 +426378,15 @@
     "wikipedia_summary": null
   },
   "iRealty Manager": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Data base user interface and query software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426356,23 +426404,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.0,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "iRealty Manager is a real estate database and customer relationship management software. It is used by property managers and real estate agents to track listings, manage client contacts, and handle lease or sales transactions.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Oracle Corporation",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "iRealty Manager is a real estate software product that does not have an English Wikipedia article.",
-      "suggested_action": "reject",
+      "rationale": "No English Wikipedia article exists for this real estate management software.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "iRealty Manager",
-    "status": "pending",
-    "wikipedia_summary": "iRealty Manager is a hot technology asset categorized under Data base user interface and query software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "iRealty Manager is a real estate database and customer relationship management software. It is used by property managers and real estate agents to track listings, manage client contacts, and handle lease or sales transactions."
   },
   "iRez Systems Rezware XP7": {
     "best_source_name": null,
@@ -426432,13 +426480,15 @@
     "wikipedia_summary": null
   },
   "iSystems Evolution Payroll and Tax Management": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Time accounting software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426456,23 +426506,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.0,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "iSystems Evolution Payroll and Tax Management is a human resources and payroll processing software suite. It is used by human resources managers to automate payroll calculations, handle tax filings, and track employee time and attendance.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Xero",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "iSystems Evolution is a niche payroll software with no dedicated Wikipedia article.",
-      "suggested_action": "reject",
+      "rationale": "No English Wikipedia article exists for this payroll and tax software.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "iSystems Evolution Payroll and Tax Management",
-    "status": "pending",
-    "wikipedia_summary": "iSystems Evolution Payroll and Tax Management is a hot technology asset categorized under Time accounting software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "iSystems Evolution Payroll and Tax Management is a human resources and payroll processing software suite. It is used by human resources managers to automate payroll calculations, handle tax filings, and track employee time and attendance."
   },
   "iView Systems": {
     "best_source_name": null,
@@ -426561,13 +426611,15 @@
     "wikipedia_summary": null
   },
   "inData TrialDirector": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Presentation software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426584,10 +426636,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "inData TrialDirector is a litigation presentation and evidence management software developed by inData Corporation. It is used by attorneys and legal professionals to organize deposition videos, documents, and exhibits for courtroom presentations.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for this specific trial presentation software.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "inData TrialDirector",
-    "status": "pending",
-    "wikipedia_summary": "inData TrialDirector is a hot technology asset categorized under Presentation software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "inData TrialDirector is a litigation presentation and evidence management software developed by inData Corporation. It is used by attorneys and legal professionals to organize deposition videos, documents, and exhibits for courtroom presentations."
   },
   "intelligenz Solutions intelliSpa": {
     "best_source_name": null,
@@ -426703,13 +426769,15 @@
     "wikipedia_summary": null
   },
   "irs-aims MARS": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Enterprise resource planning ERP software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426726,19 +426794,35 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "Aims MARS is an enterprise resource planning and administration software platform developed to support internal management and financial tracking for insurance agencies. It integrates policy accounting, claims processing, and general ledger operations into a centralized database. The system is utilized by insurance sales agents and administrative personnel to streamline daily workflow and reporting requirements.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for irs-aims MARS.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "irs-aims MARS",
-    "status": "pending",
-    "wikipedia_summary": "irs-aims MARS is a hot technology asset categorized under Enterprise resource planning ERP software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "Aims MARS is an enterprise resource planning and administration software platform developed to support internal management and financial tracking for insurance agencies. It integrates policy accounting, claims processing, and general ledger operations into a centralized database. The system is utilized by insurance sales agents and administrative personnel to streamline daily workflow and reporting requirements."
   },
   "isolved Time": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Time accounting software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -426755,10 +426839,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "Isolved Time is a cloud-based time and attendance tracking software developed by isolved HCM. It automates employee time collection, scheduling, absence management, and overtime calculations to ensure accurate payroll processing. The application is utilized by human resources personnel and payroll clerks to monitor workforce attendance and integrate with core human capital management suites.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for isolved Time.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "isolved Time",
-    "status": "pending",
-    "wikipedia_summary": "isolved Time is a hot technology asset categorized under Time accounting software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "Isolved Time is a cloud-based time and attendance tracking software developed by isolved HCM. It automates employee time collection, scheduling, absence management, and overtime calculations to ensure accurate payroll processing. The application is utilized by human resources personnel and payroll clerks to monitor workforce attendance and integrate with core human capital management suites."
   },
   "j2 Global Communications onebox": {
     "best_source_name": null,
@@ -427029,13 +427127,15 @@
     "wikipedia_summary": null
   },
   "mPlexus DICOM RadiX": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Medical software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427052,19 +427152,35 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "MPlexus DICOM RadiX is a medical imaging software application designed for the acquisition, viewing, and distribution of DICOM-compliant radiological studies. It provides diagnostic visualization tools and integrates with hospital picture archiving and communication systems. Radiologists and medical imaging technicians use the software to analyze scans and manage patient records across clinical networks.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for mPlexus DICOM RadiX.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "mPlexus DICOM RadiX",
-    "status": "pending",
-    "wikipedia_summary": "mPlexus DICOM RadiX is a hot technology asset categorized under Medical software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "MPlexus DICOM RadiX is a medical imaging software application designed for the acquisition, viewing, and distribution of DICOM-compliant radiological studies. It provides diagnostic visualization tools and integrates with hospital picture archiving and communication systems. Radiologists and medical imaging technicians use the software to analyze scans and manage patient records across clinical networks."
   },
   "medQ Q/ris": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Medical software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427081,19 +427197,35 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "MedQ Q/ris is a radiology information system developed by medQ to manage medical imaging workflows in clinical environments. It integrates patient scheduling, document tracking, billing, and report generation with picture archiving and communication systems. Radiologists and healthcare administrators use the platform to coordinate diagnostic imaging procedures and streamline departmental operations.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for medQ Q/ris.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "medQ Q/ris",
-    "status": "pending",
-    "wikipedia_summary": "medQ Q/ris is a hot technology asset categorized under Medical software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "MedQ Q/ris is a radiology information system developed by medQ to manage medical imaging workflows in clinical environments. It integrates patient scheduling, document tracking, billing, and report generation with picture archiving and communication systems. Radiologists and healthcare administrators use the platform to coordinate diagnostic imaging procedures and streamline departmental operations."
   },
   "myWriterTools": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Word processing software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427117,10 +427249,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "MyWriterTools is a word processing and editing software utility designed to assist authors and editors with manuscript formatting and document organization. It provides automated style checking, citation management, and structural outlining features for long-form writing projects. Editors, proofreaders, and copywriters use the application to streamline the publication preparation process.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for myWriterTools.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "myWriterTools",
-    "status": "pending",
-    "wikipedia_summary": "myWriterTools is a hot technology asset categorized under Word processing software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "MyWriterTools is a word processing and editing software utility designed to assist authors and editors with manuscript formatting and document organization. It provides automated style checking, citation management, and structural outlining features for long-form writing projects. Editors, proofreaders, and copywriters use the application to streamline the publication preparation process."
   },
   "nbtstat": {
     "best_source_name": null,
@@ -427316,13 +427462,15 @@
     "wikipedia_summary": "Pandas is a popular open-source software library built on top of NumPy for data manipulation and analysis in the Python programming language."
   },
   "people@work": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Enterprise resource planning ERP software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427339,10 +427487,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.0,
+      "detail": null,
+      "drafted_definition": "People@work is an enterprise resource planning and human resources management software suite used to track personnel data, attendance, and payroll records. It provides centralized modules for employee administration, recruitment tracking, and internal communications within corporate environments. Administrative assistants and human resources staff use the platform to manage workforce documentation and daily office operations.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No English Wikipedia article exists for people@work.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "people@work",
-    "status": "pending",
-    "wikipedia_summary": "people@work is a hot technology asset categorized under Enterprise resource planning ERP software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "People@work is an enterprise resource planning and human resources management software suite used to track personnel data, attendance, and payroll records. It provides centralized modules for employee administration, recruitment tracking, and internal communications within corporate environments. Administrative assistants and human resources staff use the platform to manage workforce documentation and daily office operations."
   },
   "peoplefluent Performance": {
     "best_source_name": null,
@@ -427459,13 +427621,15 @@
     "wikipedia_summary": "GNU plotutils is a collection of free software command-line utilities and libraries used for generating 2D plot graphics from data sets. It provides C and C++ language bindings and includes tools capable of generating graphs and performing numerical calculations."
   },
   "pm ase QuickBuild": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Development environment software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427483,23 +427647,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.8,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "pm ase QuickBuild is an enterprise software development environment used by project managers to build and manage applications. It provides automated build pipelines and deployment tools for software engineering teams. The platform helps streamline release management across different environments.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "List of file formats",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "QuickBuild by PM ASE is a specialized development tool without a Wikipedia page.",
-      "suggested_action": "reject",
+      "rationale": "No dedicated Wikipedia article exists for this specific development software.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "pm ase QuickBuild",
-    "status": "pending",
-    "wikipedia_summary": "pm ase QuickBuild is a hot technology asset categorized under Development environment software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "pm ase QuickBuild is an enterprise software development environment used by project managers to build and manage applications. It provides automated build pipelines and deployment tools for software engineering teams. The platform helps streamline release management across different environments."
   },
   "poLCA": {
     "best_source_name": null,
@@ -427559,13 +427723,15 @@
     "wikipedia_summary": null
   },
   "rL Solutions Feedback MonitorPro": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Customer relationship management CRM software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427582,12 +427748,28 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.8,
+      "detail": null,
+      "drafted_definition": "rL Solutions Feedback MonitorPro is a customer relationship management and incident tracking software developed by RL Solutions. It is used by healthcare organizations to collect, monitor, and analyze patient feedback and safety incidents. The application helps staff manage quality improvement workflows and patient relations.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No Wikipedia article exists for this specific feedback monitoring application.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "rL Solutions Feedback MonitorPro",
-    "status": "pending",
-    "wikipedia_summary": "rL Solutions Feedback MonitorPro is a hot technology asset categorized under Customer relationship management CRM software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "rL Solutions Feedback MonitorPro is a customer relationship management and incident tracking software developed by RL Solutions. It is used by healthcare organizations to collect, monitor, and analyze patient feedback and safety incidents. The application helps staff manage quality improvement workflows and patient relations."
   },
   "sK1": {
+    "ai_status": "cannot_determine",
+    "ai_status_detail": "unresolvable",
     "best_source_name": null,
     "category": "Graphics or photo imaging software",
     "cross_score": null,
@@ -427611,19 +427793,35 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": null,
+      "detail": "no_page",
+      "drafted_definition": null,
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "unresolvable",
+      "prior_title": null,
+      "proposed_title": "SK1 (software)",
+      "rationale": null,
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "sK1",
     "status": "pending",
     "wikipedia_summary": "sK1 is a hot technology asset categorized under Graphics or photo imaging software in the O*NET framework."
   },
   "seoClarity": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Web platform development software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-10",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427641,23 +427839,23 @@
     "report_note": null,
     "resolved_title": null,
     "second_pass": {
-      "attempted_on": "2026-08-11",
-      "attempts": 1,
-      "confidence": 0.9,
+      "attempted_on": "2026-08-14",
+      "attempts": 2,
+      "confidence": 0.8,
       "detail": null,
-      "drafted_definition": null,
+      "drafted_definition": "seoClarity is an enterprise search engine optimization and content marketing platform developed by seoClarity Inc. It is used by digital marketers to analyze organic search performance, track keyword rankings, and audit technical website health. The software integrates with various web analytics tools to provide actionable data for search marketing strategies.",
       "measured_score": null,
       "model": "gemini-flash-lite-latest",
-      "outcome": "no_article",
-      "prior_title": "Usability",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
       "proposed_title": null,
-      "rationale": "seoClarity is a specific enterprise SEO platform that lacks a dedicated Wikipedia article.",
-      "suggested_action": "reject",
+      "rationale": "No dedicated Wikipedia article exists for this commercial SEO platform.",
+      "suggested_action": null,
       "version": 1
     },
     "skill_name": "seoClarity",
-    "status": "pending",
-    "wikipedia_summary": "seoClarity is a hot technology asset categorized under Web platform development software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "seoClarity is an enterprise search engine optimization and content marketing platform developed by seoClarity Inc. It is used by digital marketers to analyze organic search performance, track keyword rankings, and audit technical website health. The software integrates with various web analytics tools to provide actionable data for search marketing strategies."
   },
   "sim4": {
     "best_source_name": "Wikipedia",
@@ -427689,13 +427887,15 @@
     "wikipedia_summary": "Sim4 is a nucleotide sequence alignment program specifically designed to align DNA sequences to cDNA or EST targets."
   },
   "simplifyMD": {
-    "best_source_name": null,
+    "ai_status": "awaiting_review",
+    "ai_status_detail": "model_authored_verified",
+    "best_source_name": "Model-authored, no encyclopedic source",
     "category": "Medical software",
     "cross_score": null,
-    "gate_reason": "no_candidate_found",
+    "gate_reason": "model_authored_verified",
     "is_credible": null,
     "is_hot_tech_anywhere": true,
-    "last_updated": "2026-08-12",
+    "last_updated": "2026-08-14",
     "occupations": [
       {
         "is_hot_tech": true,
@@ -427768,10 +427968,24 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": 0.8,
+      "detail": null,
+      "drafted_definition": "simplifyMD is an electronic health record software designed specifically for specialty medical practices. It provides clinical documentation, medical billing, and practice management workflows for physicians. The platform allows healthcare providers to manage patient charts and prescriptions electronically.",
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "model_authored_verified",
+      "prior_title": null,
+      "proposed_title": null,
+      "rationale": "No dedicated Wikipedia article exists for this specific medical software product.",
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "simplifyMD",
-    "status": "pending",
-    "wikipedia_summary": "simplifyMD is a hot technology asset categorized under Medical software in the O*NET framework."
+    "status": "approved",
+    "wikipedia_summary": "simplifyMD is an electronic health record software designed specifically for specialty medical practices. It provides clinical documentation, medical billing, and practice management workflows for physicians. The platform allows healthcare providers to manage patient charts and prescriptions electronically."
   },
   "solidThinking": {
     "best_source_name": "Wikipedia",
@@ -428043,6 +428257,8 @@
     "wikipedia_summary": null
   },
   "z-Tree": {
+    "ai_status": "cannot_determine",
+    "ai_status_detail": "unresolvable",
     "best_source_name": null,
     "category": "Analytical or scientific software",
     "cross_score": null,
@@ -428073,7 +428289,21 @@
     "reference_url": null,
     "report_note": null,
     "resolved_title": null,
-    "second_pass": null,
+    "second_pass": {
+      "attempted_on": "2026-08-14",
+      "attempts": 1,
+      "confidence": null,
+      "detail": "disambiguation",
+      "drafted_definition": null,
+      "measured_score": null,
+      "model": "gemini-flash-lite-latest",
+      "outcome": "unresolvable",
+      "prior_title": null,
+      "proposed_title": "Z-Tree",
+      "rationale": null,
+      "suggested_action": null,
+      "version": 1
+    },
     "skill_name": "z-Tree",
     "status": "pending",
     "wikipedia_summary": "z-Tree is a hot technology asset categorized under Analytical or scientific software in the O*NET framework."

@@ -39,31 +39,28 @@
         -->
         <section class="panel prose">
             <h2>Overview</h2>
-            <p>When people talk about Artificial Intelligence in the workplace, 
-                the conversation usually focuses on broad, dramatic predictions: 
-                Which jobs will disappear? Which job titles are safe? 
-                In reality, technology rarely eliminates entire occupations overnight. 
-                Instead, it reshapes the individual tasks and daily competencies that make up a job. 
-                A Software Engineer, an Accountant, and a Legal Assistant might keep their job titles for decades, 
-                but the specific software, tools, and workflows they use every day are changing rapidly. 
-                This phenomenon is called skill drift. 
-                Because job titles can be slow to update and labor market statistics often lag years behind real-world trends, 
-                evaluating workplace transformation by job title alone leads to blind spots. 
-                This dashboard cuts through surface-level job titles to measure the underlying technical DNA of everyday work. 
-                By mapping standard workplace skills against the modern AI ecosystem, 
-                we can track real-time workplace changes empirically—giving workers, educators, and policy planners the 
-                clear data they need to navigate the future of work.</p>
+            <p>To understand how artificial intelligence is reshaping the workforce, we must look past
+                job titles and measure the day-to-day transformation of actual workplace tasks. Rather
+                than relying on macro labor statistics, this dashboard provides a granular view of the
+                market's evolving technological makeup by quantifying the direct semantic overlap between
+                daily workplace software skills and modern AI capabilities. With widespread AI adoption,
+                workers face a more immediate question than "Will AI take my job?": "Which parts of my
+                job will now be allocated to a machine?" This dashboard categorizes skills into three
+                distinct buckets: AI Skills which build the engine, AI Enabling Skills that connect and
+                run the engine, and Non-AI Skills represent standard operations and human domain expertise.</p>
                 <h2>How to Read</h2>
-                <p>The macro view of the dashboard measures the fundamental AI proximity of every skill across the entire labor market, 
-                categorizing them into absolute technical tiers regardless of specific job titles. Color-coding serves as the primary truth here: 
-                Core AI Skills (Dark Blue) represent direct machine learning and natural language processing capabilities, 
-                AI-Enabling Skills (Dark Red) highlight the essential data infrastructure and cloud backend required to power intelligence, 
-                and Non-AI Skills (Grey) anchor traditional operational tools. High-scoring skills on this global spectrum point to areas 
-                where generative capabilities or 
-                automated processing are heavily concentrated, indicating high potential for workflow automation. 
-                Conversely, low-scoring skills represent legacy tools and human-centered tasks that remain largely unaffected by current AI developments. 
-                Looking at the macro landscape helps readers identify which competencies are driving broad workforce transformation and where proactive, 
-                AI-augmented upskilling offers the highest strategic value.</p>
+                <p>Each skill is categorized into one of three AI-proximity buckets. AI Skills build
+                the engine—specialized tools like machine learning frameworks and neural network
+                libraries that few workers use directly but form the foundation of all AI systems.
+                AI Enabling Skills connect and run the engine—cloud infrastructure, data pipelines,
+                APIs, and embedded AI features in everyday software that enable workers without deep
+                technical backgrounds to orchestrate AI workflows. Non-AI Skills represent standard
+                operations and human domain expertise—legacy tools and tasks anchored to human judgment
+                that remain largely unaffected by current AI developments. The bars show each skill's
+                AI relevance within the current view, using an absolute banded scale: AI Skills score
+                0.70 to 1.00, AI Enabling Skills score 0.30 to 0.69, and Non-AI Skills score 0.00
+                to 0.29. Looking at which skills dominate a role or occupation helps identify where
+                proactive upskilling toward AI-enabled workflows offers the highest strategic value.</p>
         </section>
 
         <!-- KPI row. Four headline numbers, so a row of stat tiles rather than a chart. -->
@@ -133,9 +130,9 @@
                 </div>
                 <p class="panel__note">
                     Skills that are Hot Tech for at least one occupation, ranked by AI relevance.
-                    Bar length is normalized within whatever is currently filtered, so the strongest
-                    visible skill reads 1.00 and the weakest reads 0.00. Hover or click a bar for the
-                    raw score.
+                    AI Score is banded by class: AI Skill 0.70–1.00, AI Enabling 0.30–0.69, Not AI
+                    below 0.30. It is absolute, so it does not change with the filter. Hover or click
+                    a bar for the raw cosine score and full details.
                 </p>
 
                 <div class="filters">
@@ -179,15 +176,17 @@
             <!-- Explanatory prose for this tab, above the chart it introduces. -->
             <section class="panel prose">
                 <h2>Job Specific Skill Tracker</h2>
-                <p>When filtering the dashboard by a specific occupation, the visual bar gauges rescale from 0.00 to 1.00 
-                to highlight which competencies dominate that particular role, but the underlying color coding remains fixed 
-                to preserve universal context. If a skill ranking near 1.00 in your role is colored Dark Red, it signifies 
-                that even the most dominant tool in your daily workflow operates in a low-AI exposure domain, meaning your 
-                role relies heavily on traditional, human-anchored capabilities. Alternatively, if your lowest-ranked skills 
-                are Medium Blue or Dark Blue, your field is deeply intertwined with the AI ecosystem, making AI integration 
-                essential across your entire work output. High scores within your specific job profile indicate tasks best 
-                approached by learning how to partner with AI assistants to boost execution speed, while lower scores highlight 
-                baseline domain knowledge that can be mastered without immediate concern for technological disruption.</p>
+                <p>This view shows which skills dominate a specific job role. Even when a skill ranks
+                highest in your occupation, its absolute AI Score tells you its true nature: if it is
+                categorized as Non-AI (below 0.30), it means your role relies heavily on traditional,
+                human-anchored capabilities despite that tool being central to your daily work. If your
+                role's highest-ranked skills cluster in the AI Enabling range (0.30–0.69), your field
+                is moderately intertwined with the AI ecosystem, and learning native AI features within
+                your existing software stack will amplify your efficiency. If multiple skills rank as
+                AI Skills (0.70+), your role is deeply embedded in the AI ecosystem. High scores within
+                your specific job profile indicate tasks best approached by learning to orchestrate
+                AI-assisted workflows, while lower-scoring skills highlight baseline domain expertise
+                that remains stable across technological shifts.</p>
             </section>
 
             <section class="panel">
@@ -197,11 +196,11 @@
                     <button class="ghost" data-table-toggle="role" aria-pressed="false">Table view</button>
                 </div>
                 <p class="panel__note">
-                    Skills by jobs were determined by whether a skill is considered 'hot tech' 
-                    those skills are the ones being listed frequently on job posts. 
-                    Hot Tech status is read per occupation, not globally: a skill hot for Data
-                    Scientists but not for Database Architects appears under the former only.
-                    Normalized within this role. 
+                    Skills by jobs were determined by whether a skill is considered 'hot tech'—those
+                    skills are the ones being listed frequently on job posts. Hot Tech status is read
+                    per occupation, not globally: a skill hot for Data Scientists but not for Database
+                    Architects appears under the former only. AI Scores shown here are absolute, not
+                    normalized to this role, so a skill's category never changes as you filter.
                 </p>
 
                 {# Both selects are populated by dashboard.js, which has always contained a
@@ -244,9 +243,10 @@
                     <h2>AI score over time</h2>
                 </div>
                 <p class="panel__note">
-                    Raw cosine score at each 90-day re-summarization snapshot. Unnormalized, because
-                    the point is movement in the true value. One series at a time, so no legend is
-                    needed -- the title names it.
+                    Raw cosine similarity score at each 90-day snapshot, tracking changes in a single
+                    skill's AI relevance over time. Unnormalized, so the point is movement in the true
+                    measured value. The score updates when new reference material is found or when the
+                    skill's definition is refreshed by the pipeline.
                 </p>
 
                 <div class="filters">
@@ -269,78 +269,74 @@
             <section class="panel prose">
                 <h2>How we got the numbers</h2>
                 <p>
-                    This score shows how closely a skill connects to the world of artificial
-                    intelligence. Rather than showing raw similarity values, most panels scale the
-                    scores relative to each other so the most AI-intensive skills rise to the top.
+                    This score measures how closely a skill connects to the modern AI ecosystem. The
+                    pipeline uses three specialized models to produce it:
                 </p>
                 <ul>
-                    <li><strong>Occupational skill tracking.</strong> The pipeline pulls the tools
-                        and technologies O*NET records against each occupation, so the data reflects
-                        catalogued workplace practice rather than a fixed list.</li>
-                    <li><strong>The AI proximity engine.</strong> Every skill's name and its vetted
-                        definition are read together, and the system measures the conceptual distance
-                        between that text and modern AI technologies.</li>
-                    <li><strong>Why the scores are normalized.</strong> Raw similarity values cluster
-                        tightly; even an unambiguously AI tool may only register around 0.47. Most
-                        panels therefore stretch the visible range onto 0.00 to 1.00.</li>
-                    <li><strong>Reading a 1.00.</strong> It does not mean a skill is entirely
-                        artificial intelligence. It means it is the highest AI-correlated skill
-                        <em>within the current view</em>.</li>
+                    <li><strong>Cross-Encoder Model (ms-marco-MiniLM-L6-v2):</strong> Evaluates the
+                        relevance of candidate definitions to the skill name, flagging low-confidence
+                        summaries for human review.</li>
+                    <li><strong>Source Auditing and Summarization (Gemini Flash Lite):</strong>
+                        Validates source credibility, distills skill definitions, and searches for
+                        evidence of native AI features embedded in tools.</li>
+                    <li><strong>Vector Embedder (all-MiniLM-L6-v2 / ONNX Runtime):</strong> Projects
+                        skill names and definitions into 384-dimensional vector space for semantic
+                        comparison against AI anchor poles.</li>
                 </ul>
-
-                <h3>Normalization</h3>
-                <p>Bar length uses min-max normalization across the filtered slice:</p>
-                <span class="formula">normalized = (x - min) / (max - min)</span>
                 <p>
-                    Two consequences worth knowing. The lowest skill in any view renders as 0.00,
-                    which reflects its rank in that slice and not a zero score. And because the
-                    window is the filtered slice, a skill's bar changes as you filter while its raw
-                    score never does. Raw values are always shown in the tooltip, the detail panel,
-                    and every table view.
+                    Every approved skill's name and vetted definition are encoded as vectors, then
+                    measured against anchor poles representing different AI domains. The result is a
+                    raw cosine similarity score (0.00 to 1.00) that captures how semantically aligned
+                    the skill is to the AI ecosystem. Skills are then classified into three buckets
+                    using a deterministic decision tree: AI Skills (0.29+), AI Enabling Skills
+                    (0.14–0.29 with supporting infrastructure signals), and Non-AI Skills (below
+                    thresholds). The classification never changes as you filter the dashboard; only
+                    the visible ranking order changes.
                 </p>
 
-                <h3>Embedding and similarity</h3>
+                <h3>Vector Encoding and Normalization</h3>
                 <p>
-                    Skill titles and definitions are encoded into 384-dimensional vectors by a local
-                    all-MiniLM-L6-v2 model running under ONNX Runtime, with mean pooling over the
-                    token embeddings so description length does not distort the result. Vectors are
-                    L2-normalized, which reduces cosine similarity to a dot product:
+                    Skill names and definitions are tokenized and encoded into vectors using mean
+                    pooling over token embeddings. The resulting vectors are L2-normalized, which
+                    projects them onto a unit hypersphere. This reduces cosine similarity calculation
+                    to a simple dot product for fast comparison:
                 </p>
                 <span class="formula">similarity = A · B        (for unit vectors)</span>
                 <p>
-                    The AI score is a winner-take-all maximum against two poles, AI Engineering
-                    and Generative AI, measured across both the skill's name and its definition.
-                    Taking the maximum keeps a strong signal in either text from being diluted by
-                    the other.
+                    To prevent short skill names from producing high-variance scores, the system
+                    blends similarity measurements from both the full definition and the name using a
+                    90/10 weighted average: 90% definition, 10% name. This ensures the broader
+                    context carries the signal.
                 </p>
                 <p>
-                    Further anchors describe <em>how</em> a skill is adjacent to AI rather than how
-                    close it is, and are reported alongside the score without feeding into it.
-                    Blending them into one number would change every score already recorded and
-                    make the history incomparable.
+                    The AI Score reported in charts and tables is absolute: it never changes as you
+                    filter. Raw cosine scores are always displayed in tooltips and the detail panel
+                    for verification.
+                </p>
+
+                <h3>Anchor Poles and Scoring</h3>
+                <p>
+                    The raw AI score is computed as a winner-take-all maximum against two primary
+                    anchor poles: <strong>AI Engineering</strong> (neural networks, model training,
+                    computational inference) and <strong>Generative AI</strong> (large language
+                    models, transformer architecture, prompt engineering). Taking the maximum ensures
+                    a strong signal in either text is not diluted by the other, and all vectors are
+                    measured against both poles using the 90/10 weighted blend described above.
                 </p>
                 <p>
-                    They are named here for what they <em>measure</em>, which is not the same as
-                    what they are named after. <strong>Language and tooling</strong> asks whether a
-                    definition reads like a programming language or numerical library.
-                    <strong>ML infrastructure</strong> asks whether it reads like orchestration and
-                    deployment prose -- it ranks Kubernetes and MapReduce highest, and it reads low
-                    for ChatGPT, because ChatGPT's article describes a chatbot product and never
-                    mentions compute clusters. That is the correct reading of that text, not a
-                    fault. Both live in a range of roughly &minus;0.09 to +0.48, which is why the
-                    drawer prints the range beside each number: a bare four-decimal figure invites
-                    being read as a percentage.
+                    Additional anchors—<strong>Technical Backbone</strong>, <strong>ML Infrastructure</strong>,
+                    <strong>Embedded AI</strong>, and <strong>Contrast</strong>—measure
+                    <em>how</em> a skill relates to AI rather than how close it is. These are
+                    reported alongside the score but do not feed into the primary AI Score,
+                    preserving historical comparability. They live in ranges roughly from &minus;0.09
+                    to +0.48, which is why the detail drawer shows the range beside each value: a
+                    bare four-decimal figure without context invites misreading as a percentage.
                 </p>
                 <p>
-                    A fourth anchor, <strong>conventional document software</strong>, is measured
-                    and recorded but reads on nothing. It exists because the generative pole
-                    repeatedly mistook word processors and transcription tools for AI, and it
-                    separates the two cleanly; it is being collected for a quarter before anyone
-                    argues it should decide anything.
-                </p>
-                <p>
-                    Scores are stored signed, so genuine anti-correlation is preserved rather than
-                    clipped to zero.
+                    When a flagship version of a tool is identified, <strong>Embedded AI</strong>
+                    similarity takes the maximum of the blended score and a fresh measurement of the
+                    note about the tool's native AI features. An explicit confirmation also adds a
+                    flat 0.05 boost to the raw AI score.
                 </p>
 
                 <h3>Whether a tool embeds AI is searched for, not scored</h3>
@@ -369,22 +365,41 @@
                     classification and never counted as one.
                 </p>
 
-                <h3>Interpreting the three classes</h3>
+                <h3>Classification Decision Tree</h3>
+                <p>
+                    Skills are classified using a deterministic, first-match-wins rule tree that
+                    evaluates the raw AI score and related measurements in order. The thresholds are:
+                </p>
                 <ul>
-                    <li><strong>AI Skill.</strong> Cognitive modelling, machine learning frameworks,
-                        transformer architectures.</li>
-                    <li><strong>AI Enabling.</strong> The infrastructure, MLOps, and data platforms
-                        required to deploy and scale that intelligence.</li>
-                    <li><strong>Not an AI skill.</strong> Legacy workflows and domain tools that
-                        remain anchored to human judgement.</li>
+                    <li><strong>AI_SKILL_THRESHOLD:</strong> 0.29 — raw score at or above this
+                        classifies as AI Skill (Rule 0), unless technical enabling signals indicate
+                        otherwise.</li>
+                    <li><strong>AI_ENGINEERING_FLOOR:</strong> 0.14 — used by Rule 3 (Conceptual
+                        AI) as a gate for skills that show AI engineering affinity even if
+                        below the primary threshold.</li>
+                    <li><strong>TECH_BASE_FLOOR:</strong> 0.255 — threshold for evaluating general
+                        technical backbone signals.</li>
+                </ul>
+                <p>
+                    The three classes returned are:
+                </p>
+                <ul>
+                    <li><strong>AI Skill.</strong> Direct machine learning engineering, neural
+                        network frameworks, deep learning libraries, and core AI infrastructure.</li>
+                    <li><strong>AI Enabling Skill.</strong> Cloud infrastructure, data pipelines,
+                        APIs, and embedded AI features that allow workers to orchestrate or deploy
+                        intelligent workflows without building models from scratch.</li>
+                    <li><strong>Not an AI Skill.</strong> Legacy workflows, domain tools, and human
+                        expertise that remain stable across technological shifts.</li>
                 </ul>
                 <div class="notice">
-                    A calibration caveat, corrected against measurement. This previously said
-                    arbitrary English scores 0.10 to 0.15 against the AI poles as a floor effect.
-                    It does not: neutral English measures about <strong>0.00</strong>, and there is
-                    no uniform floor. What is elevated is text about <em>language</em> specifically.
-                    Non-language software of ordinary specificity sits at 0.10 to 0.14, which is the
-                    band to treat as noise.
+                    A calibration note: neutral English text scores approximately 0.00 against the
+                    AI poles. Non-language software of ordinary specificity (without programming or
+                    technical prose) typically scores 0.10 to 0.14 on the AI poles—this range should
+                    be treated as noise and reflects general technical vocabulary rather than genuine
+                    AI relevance. Language-heavy text (documentation, code examples, API references)
+                    reads higher due to semantics shared with AI domains, not because the software is
+                    AI-adjacent.
                 </div>
 
                 <h3>Human review</h3>
