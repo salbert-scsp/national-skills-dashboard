@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional
 
 import backlog as backlog_store
 import json_store
+import run_state
 from gemini_keys import DailyQuotaExhausted
 from json_store import (
     STATUS_APPROVED,
@@ -45,7 +46,9 @@ from json_store import (
 from scraping import (
     fetch_onet_tools_and_tech,
     load_local_cache,
+    normalize_skill_name,
     save_local_cache,
+    scrape_and_validate_batch,
     scrape_and_validate_skill,
     search_onet_occupations,
 )
@@ -56,6 +59,18 @@ logger = logging.getLogger(__name__)
 # A definition older than this is re-scraped and re-audited on the next run. This is
 # the single biggest quota control: without it every run re-audits every skill.
 RESUMMARIZE_AFTER_DAYS = 90
+
+# How long an occupation waits to enter the store-write window before giving up and
+# queueing itself. The only things it can be waiting on are a reviewer's commit and the
+# second pass, both of which are measured in seconds, so reaching this means something
+# is genuinely stuck and spinning would not help.
+STORE_WAIT_SECONDS = 300.0
+
+# How many skills are resolved before their audits are sent. A multiple of the Gemini
+# BATCH_SIZE, so a chunk fills whole batched requests, and small enough that a quota
+# wall discards at most this much resolve work. The resolve results are cached, so even
+# that is re-derived without network cost.
+INGEST_CHUNK = 24
 
 # Gate reasons meaning "this page was supplied, not guessed". Entries carrying one are
 # never re-scraped, not even under --force. Defined here rather than imported from
@@ -285,6 +300,9 @@ def ingest_occupation(
 
     resolved_title = payload.get("onet_title") or onet_title
 
+    # Phase 1: record every tool and work out which ones need scraping at all. Nothing
+    # here touches the network or a model.
+    todo = []
     for item in payload["skills"]:
         skill_name = item["skill_name"]
         counts["tools"] += 1
@@ -315,45 +333,66 @@ def ingest_occupation(
             logger.debug("%r is fresh; not re-auditing.", skill_name)
             continue
 
-        # Resolve, gate, and conditionally audit. Everything expensive is in here.
-        #
-        # DailyQuotaExhausted is deliberately NOT caught. It means every key is spent,
-        # so this skill was never audited and nothing about it may be written: not
-        # approved, and not queued as pending either, because a pending card asks a
-        # human to judge a definition that no audit has seen. Letting it propagate
-        # leaves the skill exactly as it was and hands the caller the job of recording
-        # the occupation on the backlog.
-        counts["scraped"] += 1
-        decision = scrape_and_validate_skill(item, cache=cache)
+        todo.append(item)
 
-        status = STATUS_APPROVED if decision["auto_approve"] else STATUS_PENDING
+    # Phase 2: resolve, gate and audit the survivors, a chunk at a time. Chunked rather
+    # than all at once so a quota wall costs at most one chunk of resolve work, and so
+    # the writes below still happen while the run is progressing rather than only at the
+    # end of an occupation with hundreds of tools.
+    #
+    # DailyQuotaExhausted is deliberately NOT caught. It means every key is spent, so
+    # the skills in flight were never audited and nothing about them may be written:
+    # not approved, and not queued as pending either, because a pending card asks a
+    # human to judge a definition that no audit has seen. Letting it propagate leaves
+    # those skills exactly as they were and hands the caller the job of recording the
+    # occupation on the backlog.
+    #
+    # Batching is kept WITHIN one occupation on purpose: the backlog records unfinished
+    # work per occupation, and a batch spanning two of them could not be resumed
+    # cleanly from that record.
+    for start in range(0, len(todo), INGEST_CHUNK):
+        chunk = todo[start:start + INGEST_CHUNK]
+        decisions = scrape_and_validate_batch(chunk, cache=cache)
 
-        # A re-scrape replaces the evidence a second-pass finding was about, so the
-        # finding has to go with it. Leaving it would show a reviewer a suggestion
-        # panel describing a page this entry no longer points at.
-        if entry is not None:
-            entry["second_pass"] = None
+        for item in chunk:
+            skill_name = item["skill_name"]
+            decision = decisions.get(normalize_skill_name(skill_name))
+            if decision is None:
+                logger.error(
+                    "No decision came back for %r; leaving it untouched.", skill_name
+                )
+                continue
 
-        upsert_master_entry(
-            master,
-            skill_name,
-            resolved_title=decision.get("resolved_title"),
-            wikipedia_summary=decision.get("summary") or "",
-            best_source_name=decision.get("best_source_name"),
-            status=status,
-            gate_reason=decision.get("gate_reason"),
-            cross_score=decision.get("cross_score"),
-            is_credible=decision.get("is_credible"),
-        )
+            counts["scraped"] += 1
+            status = STATUS_APPROVED if decision["auto_approve"] else STATUS_PENDING
 
-        if status == STATUS_APPROVED:
-            counts["approved"] += 1
-            record_snapshot(master[skill_name], timeseries)
-        else:
-            counts["pending"] += 1
-            logger.info(
-                "%r held for review (%s).", skill_name, decision.get("gate_reason")
+            # A re-scrape replaces the evidence a second-pass finding was about, so the
+            # finding has to go with it. Leaving it would show a reviewer a suggestion
+            # panel describing a page this entry no longer points at.
+            entry = master.get(skill_name)
+            if entry is not None:
+                entry["second_pass"] = None
+
+            upsert_master_entry(
+                master,
+                skill_name,
+                resolved_title=decision.get("resolved_title"),
+                wikipedia_summary=decision.get("summary") or "",
+                best_source_name=decision.get("best_source_name"),
+                status=status,
+                gate_reason=decision.get("gate_reason"),
+                cross_score=decision.get("cross_score"),
+                is_credible=decision.get("is_credible"),
             )
+
+            if status == STATUS_APPROVED:
+                counts["approved"] += 1
+                record_snapshot(master[skill_name], timeseries)
+            else:
+                counts["pending"] += 1
+                logger.info(
+                    "%r held for review (%s).", skill_name, decision.get("gate_reason")
+                )
 
     logger.info(
         "%s (%s): %d tools, %d hot, %d scraped, %d approved, %d pending, %d fresh.",
@@ -371,10 +410,20 @@ def record_snapshot(entry: Dict[str, Any], timeseries: List[Dict[str, Any]]) -> 
     produce structurally identical records. Only approved skills reach here: an
     unreviewed definition must never appear in the trend data.
     """
+    # flagship_note is absent for most skills and that is the normal case: it exists
+    # only for generic terms and platforms the flagship pass has evaluated. Passing ""
+    # scores exactly as before, so a skill the pass never reached is unaffected.
+    #
+    # embeds_ai is the same story and one degree more important: a skill embedding_pass
+    # has not reached yet is None, which earns no boost and fires no rule. That is the
+    # correct reading of "nobody has established this", and it is why approving a skill
+    # before the pass runs is safe -- the next pass picks it up and rescores it.
     metrics = calculate_ai_correlation(
         entry["skill_name"],
         entry.get("category", ""),
         entry.get("wikipedia_summary", ""),
+        entry.get("flagship_note", "") or "",
+        entry.get("embeds_ai"),
     )
     upsert_snapshot(
         timeseries,
@@ -401,24 +450,40 @@ def ingest_single_occupation(onet_code: str, force: bool = False) -> Dict[str, A
 
     On the daily quota wall the occupation goes back on the backlog and everything
     already earned is still saved.
+
+    The store is loaded and saved inside one writer window, so a reviewer committing
+    decisions at the same moment either goes first or goes second -- never underneath.
     """
-    master = load_master()
-    timeseries = load_timeseries()
     cache = load_local_cache()
     quota_exhausted = False
     counts: Dict[str, Any] = {}
 
     try:
-        counts = ingest_occupation(
-            onet_code, onet_code, master, timeseries, cache, force=force
+        with run_state.store_writer(f"ingesting {onet_code}", timeout=STORE_WAIT_SECONDS):
+            master = load_master()
+            timeseries = load_timeseries()
+            try:
+                counts = ingest_occupation(
+                    onet_code, onet_code, master, timeseries, cache, force=force
+                )
+            except DailyQuotaExhausted as err:
+                quota_exhausted = True
+                backlog_store.add_targets([onet_code], reason=backlog_store.REASON_QUOTA)
+                logger.error("%s Occupation %s returned to the backlog.", err, onet_code)
+            finally:
+                # Inside the window, so the save that lands is the one built from the
+                # copy loaded inside it.
+                save_master(master)
+                save_timeseries(timeseries)
+    except run_state.StoreBusy as busy:
+        backlog_store.add_targets([onet_code], reason=backlog_store.REASON_INTERRUPTED)
+        logger.error(
+            "%s Occupation %s was not ingested and stays queued.", busy, onet_code
         )
-    except DailyQuotaExhausted as err:
-        quota_exhausted = True
-        backlog_store.add_targets([onet_code], reason=backlog_store.REASON_QUOTA)
-        logger.error("%s Occupation %s returned to the backlog.", err, onet_code)
+        return {"quota_exhausted": False, "store_busy": True}
     finally:
-        save_master(master)
-        save_timeseries(timeseries)
+        # Outside the window on purpose: only ingestion writes the scrape cache, so it
+        # contends with nothing and does not need to hold up a reviewer.
         save_local_cache(cache)
 
     return {**counts, "quota_exhausted": quota_exhausted}
@@ -438,13 +503,18 @@ def run_ingestion(
     `limit` caps the number of occupations, which is what makes a first run against a
     new family survivable: 11- alone is dozens of occupations and hundreds of skills.
 
-    Both JSON files and the scrape cache are saved once at the end, and also saved if
-    the run is interrupted -- a KeyboardInterrupt part-way through a long ingest must
-    not throw away the work already paid for.
+    THE STORE IS LOADED AND SAVED ONCE PER OCCUPATION, inside a writer window, rather
+    than once for the whole family. Holding one in-memory copy across a family that
+    takes hours meant every reviewer decision made in that window was erased by the save
+    at the end, and -- once the window was locked against reviewers instead -- that no
+    decision could be committed at all while a run was going. Per occupation, the two
+    interleave safely and a reviewer waits seconds.
+
+    The scrape cache is still saved once at the end. Nothing else writes it.
 
     `progress` and `should_continue` are optional and keyword-only, so existing callers
     are unaffected. A cooperative stop behaves exactly like the KeyboardInterrupt path
-    below: everything unstarted goes back on the backlog and the stores are saved.
+    below: everything unstarted goes back on the backlog.
     """
     prefixes = normalize_prefixes(prefixes)
     codes = select_onet_codes(prefixes)
@@ -456,14 +526,13 @@ def run_ingestion(
         ordered = ordered[:limit]
         logger.info("Limited to the first %d occupations.", len(ordered))
 
-    master = load_master()
-    timeseries = load_timeseries()
     cache = load_local_cache()
 
     totals = {"tools": 0, "hot": 0, "scraped": 0, "approved": 0, "pending": 0, "skipped": 0}
     processed = 0
     quota_exhausted = False
     stopped = False
+    skills_total = 0
 
     try:
         for position, (onet_code, onet_title) in enumerate(ordered):
@@ -489,9 +558,36 @@ def run_ingestion(
             })
 
             try:
-                counts = ingest_occupation(
-                    onet_code, onet_title, master, timeseries, cache, force=force
+                with run_state.store_writer(
+                    f"ingesting {onet_code}", timeout=STORE_WAIT_SECONDS
+                ):
+                    master = load_master()
+                    timeseries = load_timeseries()
+                    try:
+                        counts = ingest_occupation(
+                            onet_code, onet_title, master, timeseries, cache, force=force
+                        )
+                    finally:
+                        # Inside the window and in a finally, so an occupation stopped
+                        # by the quota wall still saves what it earned, and saves it
+                        # from the copy loaded inside this window.
+                        save_master(master)
+                        save_timeseries(timeseries)
+                        skills_total = len(master)
+            except run_state.StoreBusy as busy:
+                # Nothing else should be able to hold the store this long. Stop rather
+                # than spin: the remaining occupations are queued and the next run picks
+                # them up, and a run that cannot write is not a run.
+                stopped = True
+                remaining = [code for code, _ in ordered[position:]]
+                backlog_store.add_targets(
+                    remaining, reason=backlog_store.REASON_INTERRUPTED
                 )
+                logger.error(
+                    "%s Stopped after %d occupation(s); %d returned to the backlog.",
+                    busy, processed, len(remaining),
+                )
+                break
             except DailyQuotaExhausted as err:
                 # The occupation that hit the wall AND everything after it go on the
                 # backlog. The one that hit the wall is included because it is only
@@ -523,8 +619,8 @@ def run_ingestion(
             backlog_store.add_targets(remaining, reason=backlog_store.REASON_INTERRUPTED)
         logger.warning("Interrupted after %d occupations; saving progress.", processed)
     finally:
-        save_master(master)
-        save_timeseries(timeseries)
+        # The stores are already saved, per occupation, inside their writer windows.
+        # Only the scrape cache is left, and nothing else writes it.
         save_local_cache(cache)
 
     logger.info(
@@ -536,7 +632,9 @@ def run_ingestion(
     return {
         "occupations": processed,
         "totals": totals,
-        "skills": len(master),
+        # Counted from the last save rather than a held reference: nothing here keeps
+        # the store in memory between occupations any more.
+        "skills": skills_total,
         "quota_exhausted": quota_exhausted,
         "stopped": stopped,
     }

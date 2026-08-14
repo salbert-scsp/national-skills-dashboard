@@ -29,6 +29,10 @@ multisource_skills_cache.json
 computed_dashboard_skills.json
 multisource_computed_dashboard.json
 AI_skills_dashboard_mini.json
+# Dated embedded-AI verdicts. Ignored rather than committed because it is a cache: a
+# full rebuild costs hours of search cadence but no correctness, and committing it would
+# put one machine's search results in everyone's history.
+embedding_probe_cache.json
 *.db
 *.sqlite3
 .cache/

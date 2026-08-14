@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scrape progress</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
     {#
         The refresh is conditional, and that is the whole design. While a run is live
         this fragment reloads itself every five seconds; when nothing is running it is

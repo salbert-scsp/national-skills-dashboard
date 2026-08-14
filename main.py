@@ -31,24 +31,41 @@ threadpool. Ingestion additionally runs as a BackgroundTask so the browser is no
 open for the length of a full occupation pull.
 """
 
+import datetime
 import json
 import logging
 import os
 import re
 import threading
+from collections import Counter
 from contextlib import asynccontextmanager
 from urllib.parse import quote
 
+from typing import List, Optional
+
 from fastapi import BackgroundTasks, FastAPI, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+from pydantic import BaseModel, Field
 
 import auth
 import backlog as backlog_store
 import run_state
-from dashboardtables import build_review_rows, load_dashboard
+from dashboardtables import (
+    PRIORITY_ACTIONABLE,
+    PRIORITY_NEEDS_HUMAN,
+    PRIORITY_REPORTED,
+    build_dashboard_rows,
+    build_review_rows,
+    load_dashboard,
+)
 from json_store import (
     STATUS_APPROVED,
     STATUS_PENDING,
@@ -56,18 +73,29 @@ from json_store import (
     latest_snapshots,
     load_master,
     load_timeseries,
+    save_master,
+    save_timeseries,
+    upsert_snapshot,
 )
 from review_actions import (
+    MAX_BATCH_DECISIONS,
     REPORT_REASONS,
     apply_machine_draft,
     apply_machine_suggestion,
+    apply_review_batch,
     approve_skill,
     edit_approved_skill,
+    mark_duplicate,
+    reject_draft,
     reject_skill,
     remediate_skill,
     report_skill,
 )
-from scraping import CROSS_ENCODER_THRESHOLD, REMEDIATION_ERROR_CODES
+from scraping import (
+    CROSS_ENCODER_THRESHOLD,
+    MAX_REFERENCE_URL_CHARS,
+    REMEDIATION_ERROR_CODES,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -120,8 +148,73 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+class RevalidatedStatics(StaticFiles):
+    """
+    Serves /static, telling browsers to check with us before reusing anything.
+
+    Plain StaticFiles sends an ETag and a Last-Modified and NO Cache-Control, which
+    leaves a browser free to apply its own heuristic and reuse a file for hours without
+    asking. That cost real time: an edited review.js kept being cached client-side while
+    the server was serving the new one byte for byte, so a feature that worked everywhere
+    it was tested did not work in the browser looking at it.
+
+    `no-cache` does not mean "do not cache". It means "revalidate before reusing", and
+    with the ETag already being sent that revalidation is a 304 with no body. The pairing
+    with the ?v= stamp below is belt and braces: the stamp changes the URL when a file
+    changes, and this stops a stale copy being reused under the old URL in the meantime.
+    """
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+# Resolved against THIS FILE, not the working directory. static/ and templates/ ship
+# beside the code and never move, so a relative "static" only worked when the process
+# happened to start in the project root -- importing main from anywhere else raised
+# "Directory 'static' does not exist" at import time. Same reasoning as storage.MODEL_DIR.
+_HERE = os.path.dirname(os.path.abspath(__file__))
+
+app.mount("/static", RevalidatedStatics(directory=os.path.join(_HERE, "static")), name="static")
+templates = Jinja2Templates(directory=os.path.join(_HERE, "templates"))
+
+
+def asset_version(name: str) -> str:
+    """
+    A short stamp for a static file, changing whenever the file does.
+
+    Appended to asset URLs so a changed file is a changed URL, which is the only thing
+    that reliably defeats a cache that has already decided it knows what /static/x.js
+    contains. One stat() per render, which is noise next to reading the store.
+    """
+    try:
+        # _HERE, not a relative "static": started from another directory this silently
+        # returned "0" for every asset, which is a constant, which is no cache busting
+        # at all -- the failure mode being a stale asset rather than an error is exactly
+        # why it is worth resolving properly.
+        stat = os.stat(os.path.join(_HERE, "static", name))
+    except OSError:
+        return "0"
+    return f"{int(stat.st_mtime)}-{stat.st_size}"
+
+
+# Exposed to every template, so a new asset never needs a new context key.
+templates.env.globals["asset_version"] = asset_version
+
+
+def _no_stale_html(response):
+    """
+    Stops a browser reusing a rendered page without asking.
+
+    Every HTML page here is a view of a store that changes underneath it: the queue after
+    a commit, the dashboard after a scrape. A cached copy is a page showing work that has
+    already been done, which is indistinguishable from work that did not happen. Static
+    assets are handled separately, by RevalidatedStatics and the ?v= stamp.
+    """
+    if "text/html" in (response.headers.get("content-type") or ""):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @app.middleware("http")
@@ -138,10 +231,10 @@ async def require_login(request: Request, call_next):
     is the one that mutates the store.
     """
     if auth.is_public(request.url.path):
-        return await call_next(request)
+        return _no_stale_html(await call_next(request))
 
     if auth.valid(request.cookies.get(auth.COOKIE_NAME)):
-        return await call_next(request)
+        return _no_stale_html(await call_next(request))
 
     if request.method != "GET":
         return JSONResponse({"ok": False, "code": "auth"}, status_code=401)
@@ -160,6 +253,10 @@ GATE_REASON_LABELS = {
     "reviewer_remediated": "Reviewer-supplied page",
     "machine_remediated": "Machine-suggested page",
     "reported_by_viewer": "Reported from the dashboard",
+    # Text with no external source that reached the dashboard on two agreeing calls
+    # rather than a click. Named plainly so nobody has to know what "model_authored"
+    # means to understand that no source stands behind it.
+    "model_authored_verified": "Written by the model, no source, verified",
 }
 
 # Sentences for the post-mortem edit form, same fixed-table pattern as remediation.
@@ -193,6 +290,30 @@ REMEDIATION_ERRORS = {
     "disambiguation": "That page is a disambiguation list rather than an article. Pick "
                       "the specific page it links to.",
     "no_text": "That page exists but returned no summary text to score.",
+    "bad_scheme": "Only http and https links can be fetched. A file:// path or a "
+                  "javascript: link is not a reference.",
+    "blocked_host": "That address is on this machine or on a private network, so it is "
+                    "not a source anyone else could check. Use a public URL.",
+    "too_long": "That link is too long to store. Copy the link to the highlight again, "
+                "selecting a shorter passage.",
+    "fetch_failed": "That page could not be fetched. Check the link opens in a browser, "
+                    "and note that sites behind a login or a bot check cannot be read "
+                    "from here.",
+    "not_html": "That link is a file rather than a web page. Link to a page that "
+                "describes the product.",
+    "needs_javascript": "That site only builds its text in a browser, so there is "
+                        "nothing to read from here. Link to a documentation or "
+                        "reference page that works with JavaScript off, or type the "
+                        "definition in yourself.",
+    "too_thin": "That page had almost no readable text on it -- usually a menu, a "
+                "redirect stub, or a bot check that answered with an empty shell. What "
+                "little was there would have become the definition, so it was refused. "
+                "Link to a page that describes the product in prose, or type the "
+                "definition in yourself.",
+    "fragment_not_found": "The highlighted passage was not found on the page. The site "
+                          "may render its text with JavaScript, or the page may have "
+                          "changed. Paste the plain link instead, or type the "
+                          "definition in yourself.",
     "not_pending": "That item is no longer pending, so it was not changed.",
     "not_found": "That skill is no longer in the store.",
     "no_suggestion": "There is no stored suggestion for that item any more. Re-run the "
@@ -262,6 +383,31 @@ def _page_window(page: int, total_pages: int, span: int = 2) -> list:
     return window
 
 
+def queue_skill_names() -> list:
+    """
+    Names in the actionable review queue, to autocomplete the duplicate-merge box.
+
+    The QUEUE, not every pending entry. Measured on the live store: 185 queued names is
+    a 9 KB datalist, while all 3,984 pending entries is 202 KB added to every load of
+    this page. The queue is also where duplicates actually surface, because that is what
+    a reviewer is looking at -- both halves of the MicroSurvey CAD pair are in it.
+
+    This is a CONVENIENCE, not a constraint. The input is free text and the server
+    validates the name against the whole of master, so merging into an entry the queue
+    filters out still works; it just has to be typed in full.
+
+    Names only. The page already carries a page of full records, and adding hundreds
+    more to power an autocomplete would be a much larger payload for a smaller feature.
+    """
+    try:
+        return sorted(
+            row["skill_name"] for row in build_review_rows(load_master(), STATUS_PENDING)
+        )
+    except Exception:
+        logger.exception("Could not build the queue-name list; merging by hand still works.")
+        return []
+
+
 def fetch_pending_page(page: int) -> dict:
     """
     One page of the review queue, read from the JSON store.
@@ -279,10 +425,15 @@ def fetch_pending_page(page: int) -> dict:
     empty = {
         "items": [], "page": 1, "total_pages": 1, "total_pending": 0,
         "first_index": 0, "last_index": 0, "window": [1],
+        "band_actionable": 0, "band_reported": 0, "band_needs_human": 0,
     }
     try:
         rows = build_review_rows(load_master(), STATUS_PENDING)
         total_pending = len(rows)
+
+        # Counted over the whole queue, not the page, so the header can say how much of
+        # the cheap work is left rather than how much of it is on screen.
+        bands = Counter(row["priority"] for row in rows)
 
         # max(1, ...) so an empty queue is "page 1 of 1" rather than "page 1 of 0".
         total_pages = max(1, -(-total_pending // PAGE_SIZE))
@@ -290,16 +441,14 @@ def fetch_pending_page(page: int) -> dict:
         offset = (page - 1) * PAGE_SIZE
         items = rows[offset:offset + PAGE_SIZE]
 
+        # The card's only derived field. The flattened O*NET code and title that used to
+        # be built here went with the card's O*NET row: the occupation a skill was
+        # discovered through is not something a reviewer judges the definition on, and
+        # it is still on the entry in the store for anything that does need it.
         for item in items:
             item["gate_label"] = GATE_REASON_LABELS.get(
                 item.get("gate_reason"), item.get("gate_reason") or "Flagged"
             )
-            # The template renders one occupation line per card; the store holds a
-            # list, so surface the first as the representative and the count with it.
-            occupations = item.get("occupations") or []
-            item["onet_code"] = occupations[0]["onet_code"] if occupations else ""
-            item["onet_title"] = occupations[0]["onet_title"] if occupations else ""
-            item["occupation_count"] = len(occupations)
 
         return {
             "items": items,
@@ -309,6 +458,9 @@ def fetch_pending_page(page: int) -> dict:
             "first_index": offset + 1 if items else 0,
             "last_index": offset + len(items),
             "window": _page_window(page, total_pages),
+            "band_actionable": bands.get(PRIORITY_ACTIONABLE, 0),
+            "band_reported": bands.get(PRIORITY_REPORTED, 0),
+            "band_needs_human": bands.get(PRIORITY_NEEDS_HUMAN, 0),
         }
     except Exception:
         logger.exception("Could not read pending queue items.")
@@ -454,6 +606,9 @@ def render_review_queue(
     sp_count: str = None,
     scrape_ok: str = None,
     scrape_err: str = None,
+    rescore_ok: str = None,
+    recheck_ok: str = None,
+    recheck_err: str = None,
 ):
     """
     Renders one page of the pending review queue.
@@ -468,7 +623,10 @@ def render_review_queue(
     error_message = None
     error_item = None
     if err:
-        error_message = REMEDIATION_ERRORS.get(err, GENERIC_REMEDIATION_ERROR)
+        # COMMIT_ERRORS rather than REMEDIATION_ERRORS: it is a superset built from it,
+        # and it is the only table carrying the merge codes, so the JavaScript-off
+        # duplicate form reports a real sentence instead of the generic fallback.
+        error_message = COMMIT_ERRORS.get(err, GENERIC_REMEDIATION_ERROR)
         try:
             error_item = int(str(item).strip())
         except (TypeError, ValueError):
@@ -493,8 +651,11 @@ def render_review_queue(
             started_count = SECOND_PASS_DEFAULT_LIMIT
         consequence = {
             "suggest": "No card will be changed; findings appear as proposals you accept.",
-            "apply": "Better pages will be applied in place. Nothing will be approved.",
-            "auto": "Better pages will be applied, and clean matches approved automatically.",
+            # Kept for links and bookmarks predating the button's removal. It behaves as
+            # suggest now, and must not claim otherwise.
+            "apply": "No card will be changed; findings appear as proposals you accept.",
+            "auto": "Only clean matches -- over the score threshold and past the audit -- "
+                    "are applied and approved. Everything else is staged as a proposal.",
         }[second_pass_ok]
         second_pass_message = (
             f"Started in the background over up to {started_count} item(s). "
@@ -510,6 +671,10 @@ def render_review_queue(
         {
             "stats": fetch_queue_stats(),
             "threshold": CROSS_ENCODER_THRESHOLD,
+            # Every QUEUED name, not just this page's, because the duplicate of a card
+            # is very often paged away from it -- "MicroSurveyCAD" and "MicroSurvey
+            # Software MicroSurvey CAD" sort apart. Names only, so this stays small.
+            "queued_names": queue_skill_names(),
             "error_message": error_message,
             "error_item": error_item,
             "skill_q": skill_q or "",
@@ -528,6 +693,13 @@ def render_review_queue(
             "scrape": run_state.snapshot(),
             "second_pass_ok": second_pass_message,
             "second_pass_err": "",
+            "rescore_ok": bool(rescore_ok),
+            # The skill name IS reflected, unlike the messages above, because the whole
+            # point is confirming which one was queued. Jinja autoescapes it, and the
+            # worst a hand-edited query string achieves is showing the reader a name
+            # nothing was done to.
+            "recheck_ok": (recheck_ok or "").strip(),
+            "recheck_err": bool(recheck_err),
             "edit_message": edit_message,
             "edit_error": edit_error,
             "edited_skill": edited or "",
@@ -690,6 +862,207 @@ def handle_reject_form(skill_name: str, page: str = Form("1")):
     return RedirectResponse(url=f"/?page={_parse_page(page)}", status_code=303)
 
 
+@app.post("/reject-draft/{skill_name:path}")
+def handle_reject_draft_form(skill_name: str, page: str = Form("1")):
+    """
+    The JavaScript-off path for sending a model-written definition back to be redrafted.
+
+    Leaves the skill pending and eligible, so the next second pass rewrites it under the
+    current DEFINITION_SPEC rather than the rules it was first written under.
+    """
+    parsed_page = _parse_page(page)
+    ok, code = reject_draft(skill_name)
+    if ok:
+        return RedirectResponse(url=f"/?page={parsed_page}", status_code=303)
+    logger.error("Rejecting the draft for %r failed (%s).", skill_name, code)
+    return RedirectResponse(
+        url=f"/?page={parsed_page}&err={code}&item={quote(skill_name)}", status_code=303
+    )
+
+
+@app.post("/mark-duplicate/{skill_name:path}")
+def handle_mark_duplicate_form(
+    skill_name: str, target: str = Form(...), page: str = Form("1")
+):
+    """
+    The JavaScript-off path for merging one queued skill into another.
+
+    Errors come back through the same ?err= channel the remediation form uses, so a bad
+    target name is reported on the page rather than swallowed. The target is echoed only
+    through `item`, which is the skill name Jinja escapes; the failure sentence itself
+    comes from the fixed COMMIT_ERRORS table.
+    """
+    parsed_page = _parse_page(page)
+    ok, code = mark_duplicate(skill_name, target)
+    if ok:
+        return RedirectResponse(url=f"/?page={parsed_page}", status_code=303)
+    logger.error("Marking %r a duplicate of %r failed (%s).", skill_name, target, code)
+    return RedirectResponse(
+        url=f"/?page={parsed_page}&err={code}&item={quote(skill_name)}", status_code=303
+    )
+
+
+class StagedDecision(BaseModel):
+    """
+    One decision a reviewer queued on a card without committing it.
+
+    `summary` carries the textarea contents for an approve, so the text that gets scored
+    is the text the reviewer was looking at when they clicked. `reference` carries the
+    URL for a remediate. `target` carries the surviving skill name for a mark-duplicate.
+    Each is ignored by the actions that do not use it.
+    """
+
+    skill: str = Field(min_length=1, max_length=300)
+    action: str = Field(min_length=1, max_length=32)
+    summary: Optional[str] = Field(default=None, max_length=20000)
+    # Bounded the same as `skill`, because it is one: the name of the record being merged
+    # into. Whether it EXISTS is settled in review_actions against the loaded store, which
+    # is the only place that can answer it without a second read.
+    target: Optional[str] = Field(default=None, max_length=300)
+    # Deliberately LOOSER than scraping's MAX_REFERENCE_URL_CHARS. The real limit is
+    # enforced there, where it can answer with a sentence telling the reviewer to
+    # highlight less; rejecting it here would produce a bare 422 for what is an ordinary
+    # mistake. This bound exists only so a hostile payload cannot be unbounded.
+    reference: Optional[str] = Field(default=None, max_length=MAX_REFERENCE_URL_CHARS * 8)
+
+
+class CommitPayload(BaseModel):
+    decisions: List[StagedDecision] = Field(default_factory=list, max_length=MAX_BATCH_DECISIONS)
+
+
+# Sentences for a staged decision that did not land. Built on the remediation table,
+# which already covers every code the underlying appliers return, plus the four this
+# route can produce on its own. Same fixed-table rule as everywhere else: nothing from
+# the request reaches the page except the skill name, which Jinja and JSON both escape.
+COMMIT_ERRORS = {
+    **REMEDIATION_ERRORS,
+    "no_summary": EDIT_ERRORS["no_summary"],
+    "bad_decision": "That decision was malformed and was not applied.",
+    "duplicate": "Two decisions of the same kind were staged for that skill, so only the "
+                 "first was applied.",
+    "source_failed": "The page or definition this was waiting on did not land, so this "
+                     "was not applied. The reason is listed above it.",
+    "too_many": f"Too many decisions in one commit; the limit is {MAX_BATCH_DECISIONS}.",
+    "unknown_target": "The skill this was to be merged into is not in the store, so "
+                      "nothing was changed. Check the name against the queue.",
+    "duplicate_self": "A skill cannot be marked as a duplicate of itself.",
+    "no_draft": "There is no model-written definition on that card to send back.",
+    "not_pending": "That skill has already been decided, so its draft cannot be sent back.",
+    "target_rejected": "The skill this was to be merged into has already been rejected. "
+                       "Merging into it would put the occupation mappings somewhere "
+                       "nothing reads them, so nothing was changed.",
+}
+
+
+@app.post("/commit-review")
+def handle_commit_review(payload: CommitPayload):
+    """
+    Applies a page of staged reviewer decisions in one write.
+
+    The review page stages every click in the browser and posts them here on Commit, so
+    the store is rewritten once per page of review rather than once per click. Answers
+    JSON rather than redirecting, for the same reason /report does: the caller is
+    fetch() and it needs the per-item outcome, not a new page.
+
+    This is the ONE reviewer-facing write that takes the store-write lock. It WAITS for
+    it rather than refusing on the spot: a person is holding the page open expecting
+    their decisions to land, and the longest thing they can now be waiting on is one
+    occupation of a scrape. It used to be the whole scrape, which is why a commit made
+    during a run appeared to do nothing.
+
+    The response reports the status of every skill READ BACK from the saved store, so
+    "committed" is an observation rather than a claim.
+
+    Always HTTP 200 with an `ok` flag, again matching /report: the status describes the
+    request being understood, and a partial commit is a normal, reportable outcome
+    rather than a transport failure.
+    """
+    decisions = [d.model_dump() for d in payload.decisions]
+    if not decisions:
+        return JSONResponse({
+            "ok": False, "applied": 0, "applied_items": [], "failures": [],
+            "message": "Nothing was staged, so nothing was committed.",
+        })
+
+    try:
+        with run_state.store_writer(
+            "a reviewer commit", timeout=run_state.STORE_WAIT_SECONDS
+        ):
+            applied, applied_items, failures = apply_review_batch(decisions)
+    except run_state.StoreBusy as busy:
+        logger.warning(
+            "%s A commit of %d decision(s) was refused; nothing was changed.",
+            busy, len(decisions),
+        )
+        return JSONResponse({
+            "ok": False, "applied": 0, "applied_items": [], "failures": [],
+            "message": (
+                f"Waited {run_state.STORE_WAIT_SECONDS:.0f}s and "
+                f"{busy.holder or 'a background job'} still holds the store. Nothing was "
+                f"changed and your decisions are still staged, so press Commit again in "
+                f"a moment."
+            ),
+        })
+    except Exception:
+        logger.exception("Commit of %d staged decision(s) failed.", len(decisions))
+        return JSONResponse({
+            "ok": False, "applied": 0, "applied_items": [], "failures": [],
+            "message": "The commit failed and nothing was saved. See the server log.",
+        })
+
+    detailed = [
+        {**failure, "message": COMMIT_ERRORS.get(failure["code"], GENERIC_REMEDIATION_ERROR)}
+        for failure in failures
+    ]
+
+    # Counted from what the store says now, not from what was asked for. The three
+    # refetching actions leave an item PENDING by design, and a reviewer who staged
+    # those and watched the queue not shrink deserves to be told that in as many words.
+    #
+    # Counted per SKILL, not per decision: a chained "use this definition, then approve
+    # it" applies two decisions to one skill, and reporting "2 approved" for one card
+    # would overstate what happened.
+    status_by_skill = {item["skill"]: item["status"] for item in applied_items}
+    by_status = Counter(status_by_skill.values())
+    parts = [f"{count} {status}" for status, count in sorted(by_status.items())]
+    still_pending = by_status.get(STATUS_PENDING, 0)
+
+    if applied:
+        skills = len(status_by_skill)
+        scope = f"{applied} decision" + ("" if applied == 1 else "s")
+        if skills != applied:
+            scope += f" on {skills} skill" + ("" if skills == 1 else "s")
+        message = f"Committed {scope}: {', '.join(parts)}."
+        if still_pending:
+            message += (
+                f" The {still_pending} still pending {'is' if still_pending == 1 else 'are'} "
+                f"refetched pages, which stay in the queue by design so you can read the "
+                f"new text before deciding."
+            )
+    else:
+        message = "Nothing was committed."
+
+    if detailed:
+        message += (
+            f" {len(detailed)} could not be applied, listed below; "
+            f"{'it is' if len(detailed) == 1 else 'they are'} still staged."
+        )
+
+    logger.info(
+        "Commit applied %d decision(s) (%s), %d failed. Skills: %s",
+        applied, ", ".join(parts) or "none", len(detailed),
+        ", ".join(item["skill"] for item in applied_items) or "none",
+    )
+
+    return JSONResponse({
+        "ok": applied > 0,
+        "applied": applied,
+        "applied_items": applied_items,
+        "failures": detailed,
+        "message": message,
+    })
+
+
 @app.post("/report")
 def handle_report(
     skill_name: str = Form(...),
@@ -763,24 +1136,15 @@ def _run_ingestion(targets: list) -> None:
 
     backlog_store.add_targets(targets, reason=backlog_store.REASON_REQUESTED)
 
-    # Serialized against every other background writer of the store. Without this, two
-    # writers doing load_master -> mutate -> save_master concurrently means the one that
-    # saves last silently erases the other's work, including any approvals a reviewer
-    # made in between.
-    if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
-        logger.warning(
-            "Another background job is writing the store, so this ingestion is not "
-            "starting. Its targets stay queued and the next run picks them up."
-        )
-        return
-
+    # No lock here any more. Serialization happens per occupation, inside
+    # definitions_algorithm, around each load_master -> mutate -> save_master window.
+    # Taking it for the whole run is what stopped a reviewer committing anything while
+    # an ingestion was going, and an ingestion can run for a very long time.
     try:
         result = run_backlog()
     except Exception:
         logger.exception("Background ingestion failed for %s.", ", ".join(targets))
         return
-    finally:
-        run_state.STORE_WRITER_LOCK.release()
 
     if result.get("quota_exhausted"):
         logger.error(
@@ -807,26 +1171,23 @@ def _run_second_pass(limit: int, apply_mode: str) -> None:
     """
     from second_pass import run_second_pass
 
-    # Same exclusion as ingestion, and the reason the lock exists at all. A second pass
-    # running alongside a multi-day scrape would have both of them loading, mutating
-    # and saving the whole store; whichever finished last would discard the other.
+    # Held for the whole pass, unlike ingestion. This one writes per item through
+    # review_actions rather than in one window at the end, and it is a job of minutes,
+    # so holding it is both necessary and cheap.
     #
-    # Refused rather than queued: a scrape runs for days, and a job that "waits" for
-    # days is a job nobody knows is waiting.
-    if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
+    # Refused rather than queued: a job that "waits" is a job nobody knows is waiting.
+    try:
+        with run_state.store_writer("a second pass over the queue"):
+            result = run_second_pass(limit=limit, apply_mode=apply_mode)
+    except run_state.StoreBusy as busy:
         logger.warning(
-            "A scrape is running and holds the store, so the second pass did not "
-            "start. Nothing was changed. Pause the scrape, or wait for it to finish."
+            "%s The second pass did not start and nothing was changed. Try again in a "
+            "moment.", busy,
         )
         return
-
-    try:
-        result = run_second_pass(limit=limit, apply_mode=apply_mode)
     except Exception:
         logger.exception("Background second pass failed.")
         return
-    finally:
-        run_state.STORE_WRITER_LOCK.release()
 
     if result.get("quota_exhausted"):
         logger.error(
@@ -834,6 +1195,283 @@ def _run_second_pass(limit: int, apply_mode: str) -> None:
             "item(s); %d were left untouched and will be picked up on the next run.",
             result.get("processed", 0), result.get("remaining", 0),
         )
+
+
+# Every column the export carries, in a fixed order. Explicit rather than derived from
+# whatever keys a row happens to have: a spreadsheet whose columns move between exports
+# cannot be diffed against last quarter's, which is most of the point of having one.
+#
+# The score is split into its parts -- the measurement, then each addition separately --
+# because "why is this 0.33" is the question a reader opens the file to answer, and a
+# single total cannot answer it.
+CSV_COLUMNS = (
+    ("skill_name", "Skill"),
+    ("category", "O*NET category"),
+    ("category_bucket", "AI class"),
+    ("sub_category", "Sub-category"),
+    # The banded, reader-facing score and the raw cosine behind it. BOTH, deliberately:
+    # this export is for analysis, and every threshold in the engine is on the raw scale,
+    # so dropping the raw value would make it impossible to check a decision against the
+    # bar it was decided by. See compute_display_ai_score in dashboardtables.py.
+    ("display_ai_score", "AI Score"),
+    ("ai_score", "AI score (raw cosine)"),
+    ("ai_score_base", "AI score measured (raw cosine)"),
+    ("ai_engineering_sim", "AI engineering pole"),
+    ("ai_generative_sim", "AI generative pole"),
+    ("embedded_ai_boost", "Boost: embedded AI"),
+    ("lexical_ai_boost", "Boost: AI phrase"),
+    ("lexical_ai_terms", "AI phrases found"),
+    ("tech_base_sim", "Language and tooling"),
+    ("ml_pipeline_sim", "ML infrastructure"),
+    ("embedded_ai_sim", "Embedded AI similarity"),
+    ("contrast_sim", "Document software similarity"),
+    ("legacy_sim", "Legacy software similarity"),
+    ("embeds_ai", "AI embedded"),
+    ("embeds_ai_evidence", "Embedding evidence"),
+    ("embeds_ai_evidence_url", "Embedding evidence URL"),
+    ("embeds_ai_checked_at", "Embedding checked"),
+    ("decision_metric", "Decided on"),
+    ("decision_threshold", "Decision threshold"),
+    ("decision_margin", "Decision margin"),
+    ("in_semantic_variance_band", "Marginal"),
+    ("classification_confidence", "Confidence"),
+    ("is_generic_category", "Is a category"),
+    ("flagship_version", "Measured as"),
+    ("flagship_source", "Flagship source"),
+    ("best_source_name", "Source"),
+    ("resolved_title", "Source title"),
+    ("reference_url", "Source URL"),
+    ("occupation_count", "Occupations"),
+    ("is_hot_tech_anywhere", "Hot tech"),
+    ("snapshot_date", "Snapshot"),
+    ("wikipedia_summary", "Definition"),
+)
+
+
+def _csv_cell(value) -> str:
+    """
+    One value, rendered the way a spreadsheet should read it.
+
+    A list becomes a semicolon-joined string rather than Python's "['a', 'b']", and
+    None becomes empty rather than the word "None" -- which Excel would happily sort
+    alphabetically among real values. True/False are written as words on purpose: the
+    embedded-AI column is three-state, and blank has to mean "never established"
+    distinctly from "no".
+    """
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, (list, tuple)):
+        return "; ".join(str(item) for item in value)
+    return str(value)
+
+
+def build_scores_csv(rows) -> str:
+    """Renders the dashboard rows as CSV text, header included."""
+    import csv
+    import io
+
+    buffer = io.StringIO()
+    # QUOTE_MINIMAL with the default dialect: definitions contain commas and quotes, and
+    # csv handles the escaping correctly. Writing this by hand with join() is how a
+    # definition containing a comma silently shifts every column after it.
+    writer = csv.writer(buffer)
+    writer.writerow([label for _, label in CSV_COLUMNS])
+    for row in rows:
+        writer.writerow([_csv_cell(row.get(key)) for key, _ in CSV_COLUMNS])
+    return buffer.getvalue()
+
+
+@app.get("/admin/scores.csv")
+def handle_scores_csv():
+    """
+    Every scored skill and every part of its score, as a spreadsheet.
+
+    Behind the admin password like the rest of `/admin`. The same data is already public
+    through the dashboard, so this is not a disclosure boundary -- it is here because it
+    sits with the other operator tools and because a file that downloads on click is an
+    odd thing to hang off a public page.
+    """
+    rows = build_dashboard_rows(load_master(), load_timeseries())
+    rows.sort(key=lambda row: (row.get("ai_score") is None, -(row.get("ai_score") or 0.0)))
+
+    body = build_scores_csv(rows)
+    stamp = datetime.date.today().isoformat()
+    logger.info("Exported %d scored skill(s) as CSV.", len(rows))
+    return PlainTextResponse(
+        body,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="ai_skill_scores_{stamp}.csv"',
+        },
+    )
+
+
+def _run_rescore() -> None:
+    """
+    Re-measures every approved, scored skill from text already on disk.
+
+    NO NETWORK OF ANY KIND. No Wikipedia, no DuckDuckGo, no Gemini, no quota. It
+    re-embeds each stored definition against the current anchors and rewrites the
+    current quarter's snapshot. That is what makes a scoring change deployable at all:
+    changing an anchor invalidates every stored score, and without this the only way to
+    refresh them would be a full re-scrape of pages that have not changed.
+
+    Distinct from reclassify_snapshots.py, which re-DECIDES stored numbers without
+    re-measuring them. That is the right tool when only a threshold moved; this is the
+    one for a changed anchor or a changed scoring surface.
+
+    Goes through definitions_algorithm.record_snapshot, the same writer a human approval
+    uses, so an automatic rescore and a manual approval produce structurally identical
+    records.
+    """
+    from definitions_algorithm import record_snapshot
+
+    try:
+        with run_state.store_writer("a full rescore"):
+            master = load_master()
+            timeseries = load_timeseries()
+
+            rescored = 0
+            changed = []
+            for skill_name, entry in master.items():
+                if entry.get("status") != STATUS_APPROVED:
+                    continue
+                before = None
+                for record in timeseries:
+                    if record.get("skill_name") == skill_name:
+                        before = record.get("category_bucket")
+                metrics = record_snapshot(entry, timeseries)
+                rescored += 1
+                if before is not None and metrics["category_bucket"] != before:
+                    changed.append((skill_name, before, metrics["category_bucket"]))
+
+            save_master(master)
+            save_timeseries(timeseries)
+    except run_state.StoreBusy as busy:
+        logger.warning("%s The rescore did not start and nothing was changed.", busy)
+        return
+    except Exception:
+        logger.exception("Background rescore failed.")
+        return
+
+    logger.warning(
+        "Rescored %d approved skill(s) from stored text. %d changed class.",
+        rescored, len(changed),
+    )
+    for skill_name, before, after in changed:
+        logger.warning("  %s: %s -> %s", skill_name, before, after)
+
+
+@app.post("/admin/rescore")
+def handle_rescore(background_tasks: BackgroundTasks):
+    """
+    Redoes the maths on every approved skill. Spends nothing.
+
+    Admin-only by virtue of living off `/`, which auth.py protects. The public dashboard
+    deliberately has no such control: it would let anyone rewrite every score on the site.
+    """
+    logger.warning("Scheduling a full rescore from stored text. No network calls.")
+    background_tasks.add_task(_run_rescore)
+    return RedirectResponse(url="/?rescore_ok=1", status_code=303)
+
+
+def _run_recheck_embedding(skill_name: str) -> None:
+    """Re-probes one skill's embedded-AI verdict, ignoring the never-re-ask rule."""
+    import storage
+    from embedding_pass import apply_to_entry, plan_run, record_verdict, score_entry
+    from embedding_probe import search_embedding_evidence
+    from agentic_source_check import AuditUnavailable, get_source_checker
+    from gemini_keys import ROLE_EMBEDDING, DailyQuotaExhausted
+
+    try:
+        with run_state.store_writer(f"an embedding re-check for {skill_name!r}"):
+            master = load_master()
+            timeseries = load_timeseries()
+            cache = storage.load_embedding_cache()
+
+            entry = master.get(skill_name)
+            if entry is None:
+                logger.warning("Re-check asked for %r, which is not in the store.", skill_name)
+                return
+
+            plan = plan_run(master, timeseries, cache, forced={skill_name})
+            if not any(name == skill_name for name, _ in plan["due"]):
+                logger.warning(
+                    "%r is not in scope for an embedding check: it must be approved and "
+                    "scored. Nothing was searched.", skill_name,
+                )
+                return
+
+            found = search_embedding_evidence(skill_name)
+            if found["error"]:
+                # Unknown, never False. A blocked search is a gap, not a finding.
+                record_verdict(cache, skill_name, None, error=found["error"])
+                storage.save_embedding_cache(cache)
+                logger.warning(
+                    "Search for %r failed (%s). It stays unestablished and can be "
+                    "re-checked again.", skill_name, found["error"],
+                )
+                return
+
+            try:
+                answers = get_source_checker(ROLE_EMBEDDING).grade_embedding_batch([{
+                    "item_id": skill_name,
+                    "skill_name": skill_name,
+                    "definition": entry.get("wikipedia_summary") or "",
+                    "results": found["results"],
+                }])
+            except (AuditUnavailable, DailyQuotaExhausted) as err:
+                record_verdict(cache, skill_name, None, error="grader_unavailable")
+                storage.save_embedding_cache(cache)
+                logger.warning("Grader unavailable for %r: %s", skill_name, err)
+                return
+
+            verdict = answers.get(skill_name)
+            record = record_verdict(cache, skill_name, verdict,
+                                    error=None if verdict else "missing_from_batch")
+            storage.save_embedding_cache(cache)
+
+            if verdict is None:
+                logger.warning("No verdict came back for %r; it stays unestablished.", skill_name)
+                return
+
+            previous = entry.get("embeds_ai")
+            apply_to_entry(entry, record)
+            metrics = score_entry(skill_name, entry)
+            upsert_snapshot(timeseries, skill_name, metrics,
+                            entry.get("onet_codes", []), entry.get("onet_titles", []))
+            save_master(master)
+            save_timeseries(timeseries)
+
+            logger.warning(
+                "Re-checked %r: embeds_ai %s -> %s (%s). %s",
+                skill_name, previous, record["embeds_ai"],
+                metrics["category_bucket"], record["evidence"][:120],
+            )
+    except run_state.StoreBusy as busy:
+        logger.warning("%s The re-check did not start.", busy)
+    except Exception:
+        logger.exception("Background embedding re-check failed.")
+
+
+@app.post("/admin/recheck-embedding")
+def handle_recheck_embedding(background_tasks: BackgroundTasks, skill_name: str = Form(...)):
+    """
+    Re-probes one skill's embedded-AI verdict, overriding the never-re-ask rule.
+
+    The only way past "a confirmed finding is never re-asked", and it takes an explicit
+    name rather than being a blanket flag, so it cannot accidentally re-run the whole
+    store. Costs one search and one Gemini call.
+    """
+    name = (skill_name or "").strip()
+    if not name:
+        return RedirectResponse(url="/?recheck_err=empty", status_code=303)
+
+    logger.warning("Scheduling an embedding re-check for %r.", name)
+    background_tasks.add_task(_run_recheck_embedding, name)
+    return RedirectResponse(url=f"/?recheck_ok={quote(name)}", status_code=303)
 
 
 @app.post("/second-pass")
@@ -846,9 +1484,13 @@ def handle_second_pass_form(
     Queues a second pass over the pending queue.
 
     apply_mode is validated against a fixed tuple rather than passed through, and both
-    the default and the fallback are the mode that changes nothing. The three modes
-    differ in how much a machine may do unattended, so an unrecognized value has to land
-    on the least of them rather than on whatever the form happened to send.
+    the default and the fallback are the mode that changes nothing. The modes differ in
+    how much a machine may do unattended, so an unrecognized value has to land on the
+    least of them rather than on whatever the form happened to send.
+
+    "apply" is still accepted but no longer offered by the form, and second_pass.decide
+    now treats it as suggest: a resolution that misses the high-confidence bar is staged
+    for a click instead of being written over the card.
     """
     mode = apply_mode if apply_mode in SECOND_PASS_MODES else "suggest"
 
@@ -865,9 +1507,9 @@ def handle_second_pass_form(
             "Scheduling a second pass over %d item(s) WITH AUTO-APPROVAL enabled.", count
         )
     elif mode == "apply":
-        logger.warning(
-            "Scheduling a second pass over %d item(s) that will REWRITE cards in place. "
-            "Nothing will be approved.", count
+        logger.info(
+            "Scheduling a second pass over %d item(s) in the retired 'apply' mode, which "
+            "now behaves as suggest. No card will be changed.", count
         )
     else:
         logger.info(
@@ -1019,50 +1661,44 @@ def _scrape_worker(scope: str, force: bool) -> None:
     final_state = run_state.FINISHED
     error = None
 
+    # No store lock around the run. It used to be held from here to the end, which for a
+    # full scrape is weeks -- and every reviewer commit made in that window was refused.
+    # definitions_algorithm takes it per occupation instead, so a reviewer waits for one
+    # occupation and the two can no longer overwrite each other. The run slot claimed
+    # before this thread started is still what stops two scrapes running at once.
     try:
-        # The store lock is held for the WHOLE run, so a second pass cannot start
-        # underneath it and discard its work. Acquired after the run slot is claimed,
-        # in the same order everywhere, so the two locks cannot deadlock.
-        if not run_state.STORE_WRITER_LOCK.acquire(blocking=False):
-            logger.error("Another background job holds the store; the scrape did not start.")
-            run_state.release(run_state.IDLE, error="another job held the store")
-            return
-
-        try:
-            if scope == "full":
-                plan = plan_full_scrape()
-                run_state.set_total(plan["total"], baseline=plan["baseline"])
-                logger.warning(
-                    "Full scrape planned: %d occupations across %d SOC groups. This "
-                    "runs for weeks of daily quota, not hours.",
-                    plan["total"], len(plan["prefixes"]),
-                )
-            else:
-                # Resume: whatever is already queued is the plan. The total is what is
-                # owed right now, so the bar starts at zero and fills across this run.
-                queued = len(backlog_store.target_list())
-                run_state.set_total(queued, baseline=0)
-                logger.info("Resuming a scrape over %d queued occupation(s).", queued)
-
-            result = run_backlog(
-                force=force,
-                progress=run_state.on_event,
-                should_continue=run_state.should_continue,
+        if scope == "full":
+            plan = plan_full_scrape()
+            run_state.set_total(plan["total"], baseline=plan["baseline"])
+            logger.warning(
+                "Full scrape planned: %d occupations across %d SOC groups. This "
+                "runs for weeks of daily quota, not hours.",
+                plan["total"], len(plan["prefixes"]),
             )
+        else:
+            # Resume: whatever is already queued is the plan. The total is what is
+            # owed right now, so the bar starts at zero and fills across this run.
+            queued = len(backlog_store.target_list())
+            run_state.set_total(queued, baseline=0)
+            logger.info("Resuming a scrape over %d queued occupation(s).", queued)
 
-            if result.get("quota_exhausted"):
-                final_state = run_state.QUOTA_STOPPED
-                logger.error(
-                    "ALL GEMINI TOKENS EXHAUSTED FOR TODAY. %d occupation(s) remain "
-                    "queued and resume tomorrow. Nothing was written unaudited.",
-                    result.get("remaining", 0),
-                )
-            elif result.get("stopped"):
-                final_state = run_state.PAUSED
-            else:
-                final_state = run_state.FINISHED
-        finally:
-            run_state.STORE_WRITER_LOCK.release()
+        result = run_backlog(
+            force=force,
+            progress=run_state.on_event,
+            should_continue=run_state.should_continue,
+        )
+
+        if result.get("quota_exhausted"):
+            final_state = run_state.QUOTA_STOPPED
+            logger.error(
+                "ALL GEMINI TOKENS EXHAUSTED FOR TODAY. %d occupation(s) remain "
+                "queued and resume tomorrow. Nothing was written unaudited.",
+                result.get("remaining", 0),
+            )
+        elif result.get("stopped"):
+            final_state = run_state.PAUSED
+        else:
+            final_state = run_state.FINISHED
 
     except Exception as err:
         # Any escape leaves the run slot claimed forever and wedges the button, so the

@@ -4,10 +4,18 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Skills Analytics - HITL Review Queue</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <!--
+        The ?v= stamp busts the browser cache when an asset changes, and the `is defined`
+        guard makes it survive a running server that has picked up this template but not
+        the Python that defines asset_version. Jinja reloads templates from disk on every
+        render; main.py is only re-read on restart. Without the guard that ordinary skew
+        is a 500 on the whole page instead of an unstamped URL.
+    -->
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
 </head>
 <body>
     <header class="topbar">
+        <img class="topbar__logo" src="/static/scsplogo.jpg" alt="SCSP" />
         <h1>AI Skills Analytics <span>HITL Queue</span></h1>
         <div class="spacer"></div>
         <nav class="chips" aria-label="Views" style="margin-right: 8px;">
@@ -50,13 +58,32 @@
                     times and resume the next day each time.
                 </p>
 
-                <form action="/admin/scrape/start" method="POST">
-                    <input type="hidden" name="scope" value="full">
-                    <button type="submit" class="primary adminpanel__go"
-                            {% if scrape.running %}disabled{% endif %}>
-                        Scrape Skills
-                    </button>
-                </form>
+                <!--
+                    The export sits beside the scrape button because they are the two
+                    things an operator comes to this panel for: put work in, take
+                    results out. It is a plain link rather than a form because it is a
+                    GET that changes nothing, which also means it works with JS off and
+                    can be bookmarked.
+                -->
+                <div class="adminpanel__actions">
+                    <form action="/admin/scrape/start" method="POST">
+                        <input type="hidden" name="scope" value="full">
+                        <button type="submit" class="primary adminpanel__go"
+                                {% if scrape.running %}disabled{% endif %}>
+                            Scrape Skills
+                        </button>
+                    </form>
+
+                    <a class="button adminpanel__go" href="/admin/scores.csv" download>
+                        Download scores CSV
+                    </a>
+                </div>
+                <p class="muted" style="margin-top: 8px;">
+                    Every scored skill with its class, the measured score, each boost
+                    listed separately, all four similarity anchors, the embedded-AI
+                    verdict and its evidence, the decision and its margin, the source and
+                    the definition. One row per skill, highest score first.
+                </p>
 
                 {% if scrape_err %}
                     <div class="notice notice--error" style="margin-top: 12px;">{{ scrape_err }}</div>
@@ -141,10 +168,16 @@
         </section>
 
         <!--
-            Second pass over the queue. Three buttons rather than one because the modes
+            Second pass over the queue. Two buttons rather than one because the modes
             differ in how much happens without a click: the first changes no card at
-            all, the second rewrites cards, the third also approves. Ordered least to
-            most, and the least is both first and the server-side fallback.
+            all, the second also approves the matches that clear the confidence bar.
+            Ordered least to most, and the least is both first and the server-side
+            fallback.
+
+            There used to be a third, "Fix pages", which rewrote cards on a resolution
+            that had passed the credibility audit but missed the cross-encoder
+            threshold. That is one weak signal, and it is now staged as a proposal
+            instead, so the button no longer denotes anything distinct.
         -->
         <section class="card">
             <div class="card__head">
@@ -165,11 +198,8 @@
                 <button type="submit" name="apply_mode" value="suggest" class="primary">
                     Propose changes
                 </button>
-                <button type="submit" name="apply_mode" value="apply">
-                    Fix pages
-                </button>
                 <button type="submit" name="apply_mode" value="auto">
-                    Fix pages and approve clean matches
+                    Fix and clean high-confidence matches
                 </button>
             </form>
 
@@ -188,17 +218,75 @@
                 on each card as a proposal with an accept button, so every change is still
                 your click. Start here.
                 <br>
-                <strong>Fix pages</strong> additionally repoints cards at the articles it
-                found and writes the definitions it drafted, without your click. It still
-                approves nothing and cannot reach the dashboard.
-                <br>
-                <strong>Fix pages and approve clean matches</strong> additionally approves
-                an item outright when the article it found clears
+                <strong>Fix and clean high-confidence matches</strong> approves an item
+                outright only when the article it found clears
                 <span class="mono">{{ "%.2f"|format(threshold) }}</span> and passes the
-                credibility audit, which is the same bar ingestion already auto-approves on.
+                credibility audit, which is the same bar ingestion already auto-approves
+                on. Anything short of that -- a page the audit liked but the score did
+                not, or a definition written with no source behind it -- is staged as a
+                proposal for you, exactly as in the first mode. It never rewrites a card
+                on its own.
                 <br><br>
-                All three spend Gemini quota. Only the last two change anything on their own.
+                Both spend Gemini quota. Only the second changes anything on its own.
             </p>
+        </section>
+
+        <!--
+            Scoring maintenance. Both controls live here rather than on /dashboard,
+            which is public: one rewrites every score on the site and the other spends
+            search and Gemini quota.
+        -->
+        <section class="card">
+            <h2>Scoring maintenance</h2>
+
+            <p class="muted">
+                <strong>Rescore everything</strong> redoes the maths on the text already
+                on file. Nothing is re-pulled: no Wikipedia, no web search, no Gemini and
+                no quota. Every approved skill is re-measured against the current anchors
+                and its snapshot for this quarter is rewritten. Run it after the scoring
+                algorithm changes, which is the only time stored scores go stale without
+                the underlying text changing. It takes about half a minute.
+            </p>
+
+            <form action="/admin/rescore" method="POST" class="filters">
+                <button type="submit" class="primary">Rescore all approved skills</button>
+            </form>
+
+            {% if rescore_ok %}
+                <div class="notice notice--ok" style="margin-top: 10px;">
+                    Rescore started. It runs in the background; the server log lists every
+                    skill that changed class.
+                </div>
+            {% endif %}
+
+            <p class="muted" style="margin-top: 18px;">
+                <strong>Re-check AI embedding</strong> asks again whether one product ships
+                AI features. A confirmed finding is normally never re-asked, because a
+                product does not un-ship its features, so this is the only way past that
+                rule and it takes one name at a time on purpose. Costs one web search and
+                one Gemini call. If the search is blocked the skill is left unestablished
+                rather than being recorded as having no AI.
+            </p>
+
+            <form action="/admin/recheck-embedding" method="POST" class="filters">
+                <div class="field" style="min-width: 280px;">
+                    <label for="recheck_skill">Skill name, exactly as it appears</label>
+                    <input type="text" id="recheck_skill" name="skill_name"
+                           placeholder="Adobe Photoshop Lightroom" />
+                </div>
+                <button type="submit">Re-check</button>
+            </form>
+
+            {% if recheck_err %}
+                <div class="notice notice--error" style="margin-top: 10px;">
+                    Enter a skill name to re-check.
+                </div>
+            {% elif recheck_ok %}
+                <div class="notice notice--ok" style="margin-top: 10px;">
+                    Re-checking <span class="mono">{{ recheck_ok }}</span>. The verdict and
+                    the evidence appear in the server log when the search returns.
+                </div>
+            {% endif %}
         </section>
 
         <!--
@@ -306,15 +394,71 @@
             {% endif %}
         </section>
 
-        <section class="queue-section">
+        <section class="queue-section" data-page="{{ page }}">
             <div class="card__head" style="margin-bottom: 6px;">
                 <h2>Pending Validation Items ({{ total_pending }})</h2>
             </div>
+
+            <!--
+                Both are unhidden by review.js and stay hidden with JavaScript off, when
+                each button posts on its own exactly as it always did. Nothing here may
+                claim decisions are staged unless the code that stages them is running.
+            -->
+            <p class="muted js-stage-hint" style="margin: 0 0 16px;" hidden>
+                Decisions are staged, not saved. Click through the page, then press
+                <strong>Commit all</strong> to write them in one go.
+                You can stage two clicks on the same card &mdash; accept a suggested page
+                or a drafted definition <em>and</em> approve it &mdash; and the commit
+                applies them in order, scoring the new text rather than the text on
+                screen. Edit the box first if you want your own wording scored instead.
+            </p>
+            <div class="notice js-commit-result" style="margin-bottom: 16px;" hidden></div>
             {% if items %}
                 <p class="muted" style="margin: 0 0 16px;">
                     Showing {{ first_index }}&ndash;{{ last_index }} of {{ total_pending }}
                     {%- if total_pages > 1 %} &middot; page {{ page }} of {{ total_pages }}{% endif %}
+                    <!--
+                        The order is not alphabetical and a reviewer would otherwise have
+                        no way to know that, or that the cheap work runs out after a
+                        known number of cards.
+                    -->
+                    <br>
+                    Ordered by what you can do with them:
+                    {% if band_actionable %}
+                        <strong>{{ band_actionable }}</strong> with an answer ready to accept,
+                    {% endif %}
+                    {% if band_reported %}
+                        then <strong>{{ band_reported }}</strong> reported from the dashboard,
+                    {% endif %}
+                    {% if band_needs_human %}
+                        then <strong>{{ band_needs_human }}</strong> the model has given up on
+                        and will not look at again,
+                    {% endif %}
+                    then the rest, alphabetically.
+                    <br>
+                    Any link works in the reference field: Wikipedia, a vendor page, a
+                    manual. Best result is to highlight the sentence that defines the
+                    product, copy the link to the highlight, and paste that &mdash; the
+                    highlighted passage becomes the definition.
                 </p>
+
+                <!--
+                    Bulk staging for written definitions. STARTS HIDDEN and is unhidden by
+                    review.js, because with JavaScript off there is no staging for it to
+                    add to and the button would do nothing.
+
+                    It STAGES rather than commits, deliberately. Accepting a model-written
+                    definition is the one action that puts text with no source behind it
+                    on the dashboard, and the rule has been that a human click is what
+                    authorises each one. Staging keeps that promise honest at volume: every
+                    card is listed with its own Undo, and nothing is written until Commit
+                    is pressed. Cards the model declined to define carry no definition, so
+                    they are not eligible and are never swept up by this.
+                -->
+                <div class="card__row js-bulk-drafts" hidden>
+                    <button type="button" class="ghost js-stage-drafts"></button>
+                    <span class="muted js-stage-drafts-note"></span>
+                </div>
             {% endif %}
 
             {% if not items %}
@@ -325,14 +469,41 @@
 
             <div class="cards-grid">
                 {% for item in items %}
-                    <div class="card">
+                    <!-- data-draft-ready drives the bulk stage button. Computed in
+                         dashboardtables alongside the badge and the sort, so the button's
+                         count and the cards it acts on cannot disagree. -->
+                    <div class="card" data-skill="{{ item.skill_name }}"
+                         data-draft-ready="{{ 1 if item.draft_ready else 0 }}">
+                        <!--
+                            Where a staged decision announces itself. Written by review.js;
+                            empty and hidden with JavaScript off, when every form below
+                            posts on its own as it always did.
+                        -->
+                        <div class="card__staged" hidden></div>
+
                         <div class="card__head">
                             <h3>{{ item.skill_name }}</h3>
                             <div class="spacer"></div>
-                            {% if item.second_pass and item.second_pass.outcome in ('suggested', 'suggested_strong', 'suggested_weak') %}
+                            <!-- suggestion_ready and draft_ready are computed in
+                                 dashboardtables, alongside the priority that sorts these
+                                 cards to the front, so the badge and the ordering cannot
+                                 disagree about what counts as actionable. -->
+                            <!--
+                                The tag that stops the second pass looking at this card
+                                again. It is written on the entry rather than inferred
+                                from an outcome list, so what the automation has given up
+                                on is visible here instead of only in the store.
+                            -->
+                            {% if item.ai_status == 'cannot_determine' %}
+                                <span class="badge badge--danger"
+                                      title="{{ item.ai_status_detail or '' }}">AI cannot determine</span>
+                            {% endif %}
+                            {% if item.suggestion_ready %}
                                 <span class="badge badge--ok">Suggestion ready</span>
-                            {% elif item.second_pass and item.second_pass.outcome == 'drafted' %}
+                            {% elif item.draft_ready %}
                                 <span class="badge badge--warn">Draft ready</span>
+                            {% elif item.second_pass and item.second_pass.outcome == 'no_distinct_article' %}
+                                <span class="badge badge--danger">No article of its own</span>
                             {% endif %}
                             {% if item.gate_reason == 'no_candidate_found' %}
                                 <span class="badge badge--danger">{{ item.gate_label }}</span>
@@ -346,7 +517,11 @@
                         {% endif %}
 
                         <!--
-                            Why this item was flagged, so the reviewer is not judging blind.
+                            Why this item was flagged, in one line, so the reviewer is not
+                            judging blind while the card stays short enough to scan a page
+                            of them. The scores these sentences used to quote are gone from
+                            the card deliberately: the reviewer decides from the text and
+                            the page, and the numbers only lengthened the card.
 
                             The model-authored test comes FIRST and is not keyed on
                             gate_reason. Those items keep no_candidate_found, because that
@@ -356,133 +531,77 @@
                             does not exist.
                         -->
                         {% if item.second_pass and item.second_pass.outcome == 'model_authored' %}
-                            <div class="notice notice--error">
-                                <strong>This definition has no source.</strong> No encyclopedia
-                                article covers this product, so the text below was written by
-                                the model from the O*NET name and category alone. Nothing
-                                corroborates it and it cannot be approved automatically.
-                                Verify it yourself or reject.
-                                {% if item.second_pass.rationale %}
-                                    <br><br><span class="mono">{{ item.second_pass.rationale }}</span>
-                                {% endif %}
-                            </div>
+                            <p class="card__why card__why--bad">
+                                <strong>No source.</strong> The model wrote this text from the
+                                name and category alone. Verify it yourself or reject.
+                            </p>
                         {% elif item.gate_reason == 'machine_remediated' %}
-                            <div class="notice notice--warn">
-                                This page was proposed by an automated lookup, not by a person,
-                                and applied. The score below is recorded for information only,
-                                not enforced. Read the text before approving.
-                                {% if item.second_pass and item.second_pass.rationale %}
-                                    <br><br><span class="mono">{{ item.second_pass.rationale }}</span>
-                                {% endif %}
-                            </div>
+                            <p class="card__why">
+                                Page proposed by an automated lookup, not a person. Read the
+                                text before approving.
+                            </p>
                         {% elif item.gate_reason == 'reported_by_viewer' %}
-                            <div class="notice notice--warn">
-                                A dashboard viewer reported this skill. It is <strong>already
-                                approved and scored</strong>, and still is: the text and page below
-                                are what the dashboard is showing right now. Fix them and approve
-                                to correct the record, or reject to dismiss the report.
+                            <p class="card__why">
+                                Reported by a dashboard viewer, and still live. Fix and approve
+                                to correct the record, or reject to dismiss.
                                 {% if item.report_note %}
-                                    <br><br>Reported: <span class="mono">{{ item.report_note }}</span>
+                                    <span class="mono">{{ item.report_note }}</span>
                                 {% endif %}
-                            </div>
+                            </p>
                         {% elif item.gate_reason == 'reviewer_remediated' %}
-                            <div class="notice notice--warn">
-                                This text came from a page a reviewer supplied by hand. It was
-                                never credibility-audited, and the score below is recorded for
-                                information only, not enforced. Read it before approving.
-                            </div>
+                            <p class="card__why">
+                                Page supplied by a reviewer and never credibility-audited.
+                                Read it before approving.
+                            </p>
                         {% elif item.gate_reason == 'no_candidate_found' %}
-                            <div class="notice notice--error">
-                                No reference page could be resolved. The text below is O*NET
-                                taxonomy boilerplate, not a real definition. Replace it or reject.
-                            </div>
+                            <p class="card__why card__why--bad">
+                                No reference page resolved. The text is O*NET boilerplate, not
+                                a definition. Replace it or reject.
+                            </p>
                         {% elif item.gate_reason == 'failed_credibility_audit' %}
-                            <div class="notice notice--warn">
-                                The page match looked correct, but the source audit judged it
-                                not authoritative. Verify before approving.
-                            </div>
+                            <p class="card__why">
+                                The source audit judged this page not authoritative.
+                            </p>
                         {% elif item.gate_reason == 'audit_unavailable' %}
-                            <div class="notice notice--warn">
-                                The page match was strong, but the credibility audit could
-                                not run (API quota or outage), so this text is the raw
-                                extract and was never distilled or vetted.
-                            </div>
+                            <p class="card__why">
+                                The credibility audit could not run, so this is the raw extract,
+                                never distilled or vetted.
+                            </p>
                         {% elif item.gate_reason == 'discovered_not_audited' %}
-                            <div class="notice notice--warn">
-                                Recorded from the O*NET occupation map but never audited,
-                                normally because it is not flagged Hot Technology. There is
-                                no fetched definition to judge.
-                            </div>
+                            <p class="card__why">
+                                Recorded from the occupation map and never audited. No fetched
+                                definition to judge.
+                            </p>
                         {% elif item.gate_reason == 'below_relevance_threshold' %}
-                            <div class="notice notice--warn">
-                                The cross-encoder is not confident this page is about this skill,
-                                so no credibility audit was run. Confirm the text describes the
-                                right subject.
-                            </div>
+                            <p class="card__why">
+                                Uncertain page match. Confirm the text is about the right subject.
+                            </p>
                         {% endif %}
 
-                        <dl class="kv" style="margin-bottom: 16px;">
+                        <!--
+                            Two rows, not seven. Category and the resolved page are what the
+                            decision is actually made on; the cross-encoder score, audit
+                            verdict, best source and O*NET target were read past every time
+                            and cost a third of the card's height. They are all still in
+                            skills_master.json, and still drive the badge above.
+                        -->
+                        <dl class="kv kv--tight">
                             <dt>Category</dt>
                             <dd>{{ item.category }}</dd>
 
-                            <dt>O*NET Target</dt>
-                            <dd>
-                                {% if item.onet_code %}
-                                    <span class="mono">{{ item.onet_code }}</span> ({{ item.onet_title }})
-                                    {%- if item.occupation_count > 1 %}
-                                        <span class="muted">and {{ item.occupation_count - 1 }} more</span>
-                                    {%- endif %}
-                                {% else %}
-                                    <span class="muted">Not mapped</span>
-                                {% endif %}
-                            </dd>
-
                             <dt>Resolved Page</dt>
                             <dd>
-                                {% if item.resolved_title %}
+                                {% if item.reference_url %}
+                                    <!-- A page a reviewer supplied from outside Wikipedia.
+                                         Linked as given, since its title is a page title
+                                         and not a Wikipedia article name. -->
+                                    <a href="{{ item.reference_url }}"
+                                       target="_blank" rel="noopener noreferrer nofollow">{{ item.resolved_title }}</a>
+                                {% elif item.resolved_title %}
                                     <a href="https://en.wikipedia.org/wiki/{{ item.resolved_title|replace(' ', '_')|urlencode }}"
                                        target="_blank" rel="noopener noreferrer">{{ item.resolved_title }}</a>
                                 {% else %}
                                     <span class="muted">None resolved</span>
-                                {% endif %}
-                            </dd>
-
-                            <dt>Cross-Encoder</dt>
-                            <dd>
-                                {% if item.cross_score is not none %}
-                                    <span class="mono">{{ "%.4f"|format(item.cross_score) }}</span>
-                                    {% if item.gate_reason == 'reviewer_remediated' %}
-                                        <span class="muted">not enforced on a reviewer-supplied page</span>
-                                    {% elif item.gate_reason == 'machine_remediated' %}
-                                        <span class="muted">not enforced on a machine-suggested page</span>
-                                    {% else %}
-                                        <span class="muted">/ {{ "%.2f"|format(threshold) }} required</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="muted">Not scored</span>
-                                {% endif %}
-                                {% if item.second_pass and item.second_pass.outcome == 'confirmed_original' %}
-                                    <br><span class="muted">An independent lookup proposed this same page.</span>
-                                {% endif %}
-                            </dd>
-
-                            <dt>Credibility Audit</dt>
-                            <dd>
-                                {% if item.is_credible is none %}
-                                    <span class="muted">Not run</span>
-                                {% elif item.is_credible %}
-                                    Passed
-                                {% else %}
-                                    Failed
-                                {% endif %}
-                            </dd>
-
-                            <dt>Best Source</dt>
-                            <dd>
-                                {% if item.best_source_name %}
-                                    {{ item.best_source_name }}
-                                {% else %}
-                                    <span class="muted">Unattributed</span>
                                 {% endif %}
                             </dd>
                         </dl>
@@ -494,75 +613,128 @@
                         -->
                         {% if item.second_pass %}
                             {% set sp = item.second_pass %}
-                            {% if sp.outcome in ('suggested', 'suggested_strong', 'suggested_weak') %}
-                                <div class="notice notice--ok" style="margin-bottom: 16px;">
-                                    An automated lookup thinks this skill is really
+                            <!--
+                                The suggestion branch is guarded on the proposed page
+                                being a DIFFERENT page. A proposal can resolve back onto
+                                the page already on the card -- "AutoCAD Civil 3D" and
+                                "Civil 3D" are both redirects to "AutoCAD" -- and records
+                                settled before that was detected are terminal, so they
+                                will never be re-decided. Without this guard those cards
+                                read "this is really AutoCAD, not AutoCAD" forever.
+                            -->
+                            {% if item.suggestion_ready %}
+                                <p class="card__why card__why--ok">
+                                    A lookup thinks this is really
                                     <a href="https://en.wikipedia.org/wiki/{{ sp.proposed_title|replace(' ', '_')|urlencode }}"
-                                       target="_blank" rel="noopener noreferrer"><strong>{{ sp.proposed_title }}</strong></a>,
-                                    not {{ sp.prior_title or "the page on file" }}.
+                                       target="_blank" rel="noopener noreferrer"><strong>{{ sp.proposed_title }}</strong></a>{% if sp.outcome == 'suggested_weak' %},
+                                    though the credibility audit did not clear it{% endif %}.
                                     {% if sp.rationale %}
-                                        <br><span class="mono">{{ sp.rationale }}</span>
+                                        <span class="mono">{{ sp.rationale }}</span>
                                     {% endif %}
-                                    <br><br>
-                                    That page scores
-                                    {% if sp.measured_score is not none %}
-                                        <span class="mono">{{ "%.4f"|format(sp.measured_score) }}</span>
-                                    {% else %}
-                                        unscored
-                                    {% endif %}
-                                    against the <span class="mono">{{ "%.2f"|format(threshold) }}</span>
-                                    threshold, and
-                                    {%- if sp.outcome == 'suggested_weak' %}
-                                        the credibility audit did <strong>not</strong> clear it.
-                                    {%- else %}
-                                        the credibility audit passed.
-                                    {%- endif %}
-                                </div>
+                                </p>
 
                                 <!-- Own form: forms cannot nest, same as remediation below. -->
                                 <form action="/apply-suggestion/{{ item.skill_name|urlencode }}" method="POST"
-                                      style="margin-bottom: 16px;">
+                                      data-stage-action="apply-suggestion"
+                                      data-stage-label="Use page {{ sp.proposed_title }}"
+                                      class="card__row">
                                     <input type="hidden" name="page" value="{{ page }}">
                                     <button type="submit" class="primary" style="width: 100%;">
                                         Use suggested page: {{ sp.proposed_title }}
                                     </button>
                                 </form>
-                            {% elif sp.outcome == 'drafted' %}
-                                <div class="notice notice--error" style="margin-bottom: 16px;">
-                                    <strong>A definition was drafted, with no source behind it.</strong>
-                                    No encyclopedia article covers this product, so the model
-                                    wrote the text below from the O*NET name and category
-                                    alone. Nothing corroborates it. It has NOT been put on the
-                                    card; accepting is your call.
-                                    {% if sp.rationale %}
-                                        <br><span class="mono">{{ sp.rationale }}</span>
+                            {% elif item.draft_ready %}
+                                <p class="card__why card__why--bad">
+                                    {% if sp.detail == 'low_confidence' %}
+                                        <!--
+                                            The page was deliberately not fetched. Saying so
+                                            matters: the reviewer should know this text is
+                                            here because the lookup would not commit, not
+                                            because no article exists.
+                                        -->
+                                        <strong>Not confident enough to repoint this.</strong>
+                                        The lookup guessed
+                                        {%- if sp.proposed_title %}
+                                            <span class="mono">{{ sp.proposed_title }}</span>
+                                        {%- else %} a page{% endif %}
+                                        at {{ "%.0f"|format((sp.confidence or 0) * 100) }}% confidence,
+                                        so that page was never fetched or audited. It wrote this
+                                        instead, with no source behind it:
+                                    {% else %}
+                                        <strong>Drafted with no source.</strong> Not on the card;
+                                        accepting is your call.
                                     {% endif %}
-                                    <br><br>
                                     <em>{{ sp.drafted_definition }}</em>
-                                </div>
+                                    {% if sp.detail == 'low_confidence' and sp.proposed_title %}
+                                        <span class="mono">If that guess looks right, paste it in
+                                        the reference field below and fetch it.</span>
+                                    {% endif %}
+                                </p>
 
                                 <!-- Own form: forms cannot nest, same as remediation below. -->
                                 <form action="/apply-draft/{{ item.skill_name|urlencode }}" method="POST"
-                                      style="margin-bottom: 16px;">
+                                      data-stage-action="apply-draft"
+                                      data-stage-label="Use the drafted definition"
+                                      class="card__row">
                                     <input type="hidden" name="page" value="{{ page }}">
                                     <button type="submit" style="width: 100%;">
                                         Use this definition
                                     </button>
                                 </form>
-                            {% elif sp.outcome == 'no_article' or sp.outcome == 'not_a_product' %}
-                                <div class="notice notice--warn" style="margin-bottom: 16px;">
-                                    An automated lookup found no encyclopedia article for this
-                                    {{ "product" if sp.outcome == 'no_article' else "name, and does not think it names a real product" }}.
+
+                                <!--
+                                    Sends it back to be written again. Worth its own button
+                                    rather than leaving Reject to cover it: rejecting throws
+                                    the SKILL out, this throws out only the sentence and
+                                    keeps the card in the queue for a fresh draft.
+                                -->
+                                <form action="/reject-draft/{{ item.skill_name|urlencode }}" method="POST"
+                                      data-stage-action="reject-draft"
+                                      data-stage-label="Send the draft back to be rewritten"
+                                      class="card__row">
+                                    <input type="hidden" name="page" value="{{ page }}">
+                                    <button type="submit" class="ghost" style="width: 100%;">
+                                        Reject this draft and rewrite it
+                                    </button>
+                                </form>
+                            {% elif sp.outcome == 'no_distinct_article' %}
+                                <p class="card__why card__why--bad">
+                                    <strong>No article of its own.</strong> A lookup proposed
+                                    {% if sp.detail %}<span class="mono">{{ sp.detail }}</span>{% else %}another title{% endif %},
+                                    which redirects to
+                                    <span class="mono">{{ sp.prior_title or item.resolved_title }}</span>
+                                    &mdash; the page already on this card, and the broader
+                                    product. Nothing was fetched or audited for it. Supply a
+                                    link to the vendor's own page, write the definition
+                                    yourself, or reject.
                                     {% if sp.rationale %}
-                                        <br><span class="mono">{{ sp.rationale }}</span>
+                                        <span class="mono">{{ sp.rationale }}</span>
                                     {% endif %}
-                                </div>
+                                </p>
+                            {% elif sp.outcome == 'no_article' %}
+                                <p class="card__why">
+                                    A lookup found no encyclopedia article for this product,
+                                    so the page this card cited has been cleared. The text
+                                    below is the O*NET placeholder until a definition is
+                                    written.
+                                </p>
+                            {% elif sp.outcome == 'declined_to_define' %}
+                                <p class="card__why card__why--bad">
+                                    <strong>Needs a human definition.</strong> A lookup found
+                                    no article for this product and would not describe it from
+                                    memory either, so there is nothing written to accept.
+                                    Supply a page below, or type the definition in yourself.
+                                </p>
+                            {% elif sp.outcome == 'not_a_product' %}
+                                <p class="card__why">
+                                    A lookup found no encyclopedia article for this name, and
+                                    does not think it names a real product.
+                                </p>
                             {% elif sp.outcome == 'confirmed_original_failed_audit' %}
-                                <div class="notice notice--warn" style="margin-bottom: 16px;">
-                                    An automated lookup agreed this is the right page, so the
-                                    failed audit above stands against the correct article rather
-                                    than a mismatched one. This one needs your judgement.
-                                </div>
+                                <p class="card__why">
+                                    A lookup agreed this is the right page, so the failed audit
+                                    stands against the correct article. Your judgement.
+                                </p>
                             {% endif %}
                         {% endif %}
 
@@ -571,28 +743,35 @@
                             textarea's contents. Its own form, since forms cannot nest.
                         -->
                         <form action="/remediate/{{ item.skill_name|urlencode }}" method="POST"
-                              style="margin-bottom: 16px;">
+                              data-stage-action="remediate"
+                              data-stage-label="Refetch a supplied page"
+                              class="card__row">
                             <input type="hidden" name="page" value="{{ page }}">
                             <div class="field" style="margin-bottom: 8px;">
                                 <label for="reference-{{ loop.index }}">
-                                    Wrong page? Replace it with the correct URL
+                                    Wrong page? Paste any link: Wikipedia, a vendor page, a manual
                                 </label>
+                                <!-- The how-to for highlight links is stated once under
+                                     the queue heading, not on all 25 cards. -->
                                 <input type="text" id="reference-{{ loop.index }}"
-                                       name="reference"
-                                       placeholder="https://en.wikipedia.org/wiki/Apache_Spark" />
+                                       name="reference" data-stage-field="reference"
+                                       maxlength="4096"
+                                       placeholder="https://www.example.com/products/widget-server" />
                             </div>
                             <button type="submit" style="width: 100%;">
                                 Fetch and rescore
                             </button>
                         </form>
 
-                        <form action="/approve/{{ item.skill_name|urlencode }}" method="POST">
+                        <form action="/approve/{{ item.skill_name|urlencode }}" method="POST"
+                              data-stage-action="approve" data-stage-label="Approve and score">
                             <input type="hidden" name="page" value="{{ page }}">
                             <div class="field" style="margin-bottom: 12px;">
                                 <label for="summary-{{ loop.index }}">
                                     Definition used for vector scoring (editable)
                                 </label>
-                                <textarea id="summary-{{ loop.index }}" name="override_summary" required>{{ item.wikipedia_summary }}</textarea>
+                                <textarea id="summary-{{ loop.index }}" name="override_summary"
+                                          data-stage-field="summary" required>{{ item.wikipedia_summary }}</textarea>
                             </div>
 
                             <div class="card__actions">
@@ -600,7 +779,9 @@
                             </div>
                         </form>
 
-                        <form action="/reject/{{ item.skill_name|urlencode }}" method="POST" style="margin-top: 8px;">
+                        <form action="/reject/{{ item.skill_name|urlencode }}" method="POST"
+                              data-stage-action="reject" data-stage-label="Reject"
+                              style="margin-top: 8px;">
                             <input type="hidden" name="page" value="{{ page }}">
                             <button type="submit" class="danger" style="width: 100%;">
                                 {%- if item.second_pass and item.second_pass.suggested_action == 'reject' -%}
@@ -610,9 +791,43 @@
                                 {%- endif -%}
                             </button>
                         </form>
+
+                        <!--
+                            Merging, not rejecting. O*NET lists the same product under
+                            several spellings against DIFFERENT occupations, so rejecting
+                            the extra one would drop whichever occupations only it carried.
+                            The survivor absorbs them and keeps its own place in the queue.
+                        -->
+                        <details class="card__dupe" style="margin-top: 8px;">
+                            <summary>Same product as another queued skill</summary>
+                            <form action="/mark-duplicate/{{ item.skill_name|urlencode }}" method="POST"
+                                  data-stage-action="mark-duplicate"
+                                  data-stage-label="Merge into another skill">
+                                <input type="hidden" name="page" value="{{ page }}">
+                                <label for="dupe-{{ loop.index }}" class="card__label">
+                                    Keep this one instead, and move this card's occupations onto it
+                                </label>
+                                <input type="text" id="dupe-{{ loop.index }}" name="target"
+                                       list="queued-skill-names" autocomplete="off" required
+                                       data-stage-field="target"
+                                       placeholder="Exact name of the skill to keep">
+                                <button type="submit" class="ghost" style="width: 100%; margin-top: 6px;">
+                                    Mark as duplicate
+                                </button>
+                            </form>
+                        </details>
                     </div>
                 {% endfor %}
             </div>
+
+            <!--
+                Shared by every card's merge box. One datalist for the whole page rather
+                than one per card: the options are identical, and repeating several
+                hundred of them 25 times would dwarf the rest of the document.
+            -->
+            <datalist id="queued-skill-names">
+                {% for name in queued_names %}<option value="{{ name }}"></option>{% endfor %}
+            </datalist>
 
             {% if total_pages > 1 %}
                 <nav class="chips" aria-label="Pagination" style="margin-top: 18px; justify-content: center;">
@@ -637,5 +852,19 @@
             {% endif %}
         </section>
     </div>
+
+    <!--
+        The commit bar. Fixed to the bottom of the viewport and unhidden by review.js
+        the moment something is staged, so the reviewer can commit from wherever they
+        have scrolled to rather than hunting for the end of the page.
+    -->
+    <div class="commitbar js-commitbar" hidden>
+        <span class="commitbar__count js-commit-count">0 staged</span>
+        <div class="spacer"></div>
+        <button type="button" class="js-commit-clear">Discard staged</button>
+        <button type="button" class="primary js-commit-go">Commit all</button>
+    </div>
+
+    <script src="/static/review.js?v={{ asset_version('review.js') if asset_version is defined else '' }}" defer></script>
 </body>
 </html>

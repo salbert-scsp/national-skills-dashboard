@@ -37,6 +37,13 @@ STATUS_APPROVED = "approved"
 STATUS_REJECTED = "rejected"
 VALID_STATUSES = (STATUS_PENDING, STATUS_APPROVED, STATUS_REJECTED)
 
+# Set on a skill a viewer reported from the dashboard. It lives HERE, beside the statuses,
+# because it is the one gate reason that qualifies a status: a reported skill is pending
+# AND still published, and both the writer (review_actions) and the reader
+# (dashboardtables) have to agree on the spelling for that to hold. It was previously a
+# constant in review_actions and a bare string literal in two other modules.
+REPORT_GATE_REASON = "reported_by_viewer"
+
 
 class StoreCorrupted(RuntimeError):
     """
@@ -318,6 +325,10 @@ def upsert_master_entry(
             "skill_name": skill_name,
             "category": category,
             "resolved_title": None,
+            # Set only when the reference is NOT a Wikipedia page. Wikipedia entries
+            # keep storing a title and letting the UI build the link, so this stays
+            # None for them rather than duplicating a derivable URL.
+            "reference_url": None,
             "wikipedia_summary": None,
             "best_source_name": None,
             "last_updated": None,
@@ -422,10 +433,61 @@ def upsert_snapshot(
         "quarter": quarter,
         "snapshot_date": when.isoformat(),
         "ai_score": metrics["ai_score"],
+        # The pole measurement with nothing added, and what was added. Stored separately
+        # so a boosted 2026 snapshot stays comparable with an unboosted 2025 one: any
+        # trend that spans the change has to read ai_score_base, or it draws a 0.05 step
+        # that is a policy change rather than drift. Defaulted to ai_score with a zero
+        # boost for callers that predate the split, which is exactly what those were.
+        "ai_score_base": metrics.get("ai_score_base", metrics["ai_score"]),
+        "embedded_ai_boost": metrics.get("embedded_ai_boost", 0.0),
+        # The deterministic half, and the phrases that earned it. The terms are stored,
+        # not just the number: "this scored 0.05 higher" is unarguable only when the
+        # words that did it are on the record next to it.
+        "lexical_ai_boost": metrics.get("lexical_ai_boost", 0.0),
+        "lexical_ai_terms": metrics.get("lexical_ai_terms") or [],
         "tech_base_sim": metrics["tech_base_sim"],
         "ml_pipeline_sim": metrics["ml_pipeline_sim"],
         "embedded_ai_sim": metrics["embedded_ai_sim"],
+        # Diagnostic only, gating nothing today. Recorded so there is real data to argue
+        # from if it is ever proposed as a rule -- see calculate_ai_correlation.
+        "contrast_sim": metrics.get("contrast_sim"),
+        # Same discipline as contrast_sim: measured, stored, shown, and read by no rule.
+        # None on records written before it landed. Nothing compares it, so nothing can
+        # raise on the None, and defaulting it to 0.0 would assert a measurement that was
+        # never taken. See LEGACY_STATIC_ANCHOR for why it does not gate anything.
+        "legacy_sim": metrics.get("legacy_sim"),
+        # The two poles behind ai_score, kept apart. ai_engineering_sim is READ BY THE
+        # TOP BUCKET -- see AI_ENGINEERING_FLOOR -- so a snapshot without it cannot be
+        # reclassified faithfully. Absent on records written before this landed, which
+        # classify() reads as "skip the floor" rather than "fail it".
+        "ai_engineering_sim": metrics.get("ai_engineering_sim"),
+        "ai_generative_sim": metrics.get("ai_generative_sim"),
+        # Three-state and stored as such. None means nobody has established it, which is
+        # NOT the same as False, and collapsing the two here would make a rate-limited
+        # afternoon indistinguishable from a finding about the product.
+        "embeds_ai": metrics.get("embeds_ai"),
         "category_bucket": metrics["category_bucket"],
+        # The rules engine's verdict and its working. Read with .get() so a snapshot
+        # written before the engine landed still loads: the time series is appended to
+        # across quarters and old records are never rewritten.
+        #
+        # FIELD NAMING: snake_case, without exception. Every key in both store files uses
+        # it, and these are iterated generically by the dashboard row builders and the
+        # JSON export. A second convention would not be a style disagreement, it would be
+        # a key some iterator silently misses.
+        "sub_category": metrics.get("sub_category"),
+        "is_flagship_version_evaluated": metrics.get("is_flagship_version_evaluated", False),
+        # Provenance for a substituted score. A category term measured as Microsoft Word
+        # reads "ai 0.192" exactly like a measurement of the term itself, so which product
+        # produced it has to travel with it.
+        "is_generic_category": metrics.get("is_generic_category", False),
+        "flagship_version": metrics.get("flagship_version"),
+        "flagship_source": metrics.get("flagship_source"),
+        "decision_metric": metrics.get("decision_metric"),
+        "decision_threshold": metrics.get("decision_threshold"),
+        "decision_margin": metrics.get("decision_margin"),
+        "in_semantic_variance_band": metrics.get("in_semantic_variance_band", False),
+        "classification_confidence": metrics.get("classification_confidence"),
         "onet_codes": list(onet_codes or []),
         "onet_titles": list(onet_titles or []),
     }

@@ -34,6 +34,20 @@ pydantic==2.13.4
 requests==2.34.2
 python-dotenv==1.2.2
 
+# Strips a reviewer-supplied web page down to its readable text. Only reached from the
+# remediation field, when the link is not a Wikipedia article: Wikipedia is fetched
+# through its API and needs no HTML parsing at all.
+beautifulsoup4==4.15.0
+
+# --- Tests -----------------------------------------------------------------------
+# test_classification.py only. Most of its cases are pure arithmetic over metrics taken
+# from the live store; the two marked `real_model` load the bi-encoder and score real
+# text, because the flagship rule's safety argument is about what embedding a sentence
+# does to the other metrics and stubbed numbers cannot show that.
+#
+#   python3.11 -m pytest -q
+pytest==9.1.1
+
 # --- Retired, kept installable ---------------------------------------------------
 # Nothing under archive/ is imported by the running system, and archive/ is never on
 # sys.path. These are pinned only so the archived code stays runnable if it is ever

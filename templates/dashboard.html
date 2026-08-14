@@ -4,10 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Skills Analytics - Skill Scores</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <!--
+        The ?v= stamp busts the browser cache when an asset changes. This template was
+        the ONLY one missing it, which is why a changed dashboard.js kept being served
+        from cache while review.js updated correctly -- an old script running against a
+        new payload, which looks exactly like a broken chart. The `is defined` guard
+        matches the other templates: Jinja reloads templates from disk on every render
+        but main.py is only re-read on restart, and without the guard that ordinary skew
+        is a 500 on the whole page rather than an unstamped URL.
+    -->
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
 </head>
 <body>
     <header class="topbar">
+        <img class="topbar__logo" src="/static/scsplogo.jpg" alt="SCSP" />
         <h1>AI Skills Analytics <span>Skill Scores</span></h1>
         <div class="spacer"></div>
         <nav class="chips" aria-label="Views">
@@ -49,7 +59,8 @@
                 Core AI Skills (Dark Blue) represent direct machine learning and natural language processing capabilities, 
                 AI-Enabling Skills (Dark Red) highlight the essential data infrastructure and cloud backend required to power intelligence, 
                 and Non-AI Skills (Grey) anchor traditional operational tools. High-scoring skills on this global spectrum point to areas 
-                where generative capabilities or automated processing are heavily concentrated, indicating high potential for workflow automation. 
+                where generative capabilities or 
+                automated processing are heavily concentrated, indicating high potential for workflow automation. 
                 Conversely, low-scoring skills represent legacy tools and human-centered tasks that remain largely unaffected by current AI developments. 
                 Looking at the macro landscape helps readers identify which competencies are driving broad workforce transformation and where proactive, 
                 AI-augmented upskilling offers the highest strategic value.</p>
@@ -193,7 +204,16 @@
                     Normalized within this role. 
                 </p>
 
+                {# Both selects are populated by dashboard.js, which has always contained a
+                   full major-group filter -- fillOccupations(), the ALL_IN_GROUP sentinel
+                   and the group arm of drawRole(). The markup for #group-select was
+                   missing, so groupSelect was null and the script threw at start-up,
+                   before it drew anything. #}
                 <div class="filters">
+                    <div class="field" style="flex: 1; min-width: 220px;">
+                        <label for="group-select">Major occupational group</label>
+                        <select id="group-select"></select>
+                    </div>
                     <div class="field" style="flex: 1; min-width: 280px;">
                         <label for="occupation-select">O*NET code or job title</label>
                         <select id="occupation-select"></select>
@@ -201,6 +221,11 @@
                 </div>
 
                 <div class="panel__body">
+                    {# The selected role's own class breakdown, counted client-side from
+                       the slice. drawRole() has always painted into these two, and their
+                       absence was the second start-up throw. #}
+                    <div class="stack" id="role-bucket-stack" role="img" aria-labelledby="role-bucket-legend"></div>
+                    <div class="legend" id="role-bucket-legend"></div>
                     <!-- Same bounded-viewport treatment as the ranked list. -->
                     <div class="scrollbox">
                         <ul class="bars" id="role-bars"></ul>
@@ -289,18 +314,59 @@
                     the other.
                 </p>
                 <p>
-                    Three further anchors describe <em>how</em> a skill is adjacent to AI rather
-                    than how close it is, and are reported alongside the score without feeding
-                    into it: <strong>Tech base</strong> for languages, libraries and numerical
-                    computing; <strong>ML pipeline</strong> for orchestration, distributed compute
-                    and model infrastructure; and <strong>Embedded AI</strong> for copilots,
-                    assistants and generative features built into everyday tools. Blending all
-                    five into one number would change every score already recorded and make the
-                    history incomparable.
+                    Further anchors describe <em>how</em> a skill is adjacent to AI rather than how
+                    close it is, and are reported alongside the score without feeding into it.
+                    Blending them into one number would change every score already recorded and
+                    make the history incomparable.
+                </p>
+                <p>
+                    They are named here for what they <em>measure</em>, which is not the same as
+                    what they are named after. <strong>Language and tooling</strong> asks whether a
+                    definition reads like a programming language or numerical library.
+                    <strong>ML infrastructure</strong> asks whether it reads like orchestration and
+                    deployment prose -- it ranks Kubernetes and MapReduce highest, and it reads low
+                    for ChatGPT, because ChatGPT's article describes a chatbot product and never
+                    mentions compute clusters. That is the correct reading of that text, not a
+                    fault. Both live in a range of roughly &minus;0.09 to +0.48, which is why the
+                    drawer prints the range beside each number: a bare four-decimal figure invites
+                    being read as a percentage.
+                </p>
+                <p>
+                    A fourth anchor, <strong>conventional document software</strong>, is measured
+                    and recorded but reads on nothing. It exists because the generative pole
+                    repeatedly mistook word processors and transcription tools for AI, and it
+                    separates the two cleanly; it is being collected for a quarter before anyone
+                    argues it should decide anything.
                 </p>
                 <p>
                     Scores are stored signed, so genuine anti-correlation is preserved rather than
                     clipped to zero.
+                </p>
+
+                <h3>Whether a tool embeds AI is searched for, not scored</h3>
+                <p>
+                    The <strong>AI embedded?</strong> column is the one input on this dashboard that
+                    is not a measurement. It comes from a web search for the product followed by a
+                    reading of the results, and it is the only thing that decides the
+                    <em>Non-Technical Embedded AI</em> class. A confirmed finding also adds a flat
+                    0.05 to the raw AI score, shown broken out in the detail drawer.
+                </p>
+                <p>
+                    It used to be scored, and that is why it changed. The Embedded AI similarity
+                    column measures how a definition <em>reads</em> against vocabulary like
+                    workspace, workflow, integration and automated, which is the vocabulary of
+                    almost any productivity or design tool. A third of every skill in the store
+                    cleared the old threshold, and the class it produced contained LaTeX, EndNote
+                    and a 2D drafting package. Most of these definitions were written before the
+                    features they were being judged on existed. The similarity is still shown,
+                    beside the tag, because the disagreement between them is informative.
+                </p>
+                <p>
+                    <strong>Not checked</strong> is a real answer and not a blank. A product nobody
+                    has searched for and a product searched and found to ship no AI features are
+                    different facts, and only one of them says anything about the product. Searches
+                    get rate limited, so an unchecked skill is treated exactly as a negative for
+                    classification and never counted as one.
                 </p>
 
                 <h3>Interpreting the three classes</h3>
@@ -313,10 +379,12 @@
                         remain anchored to human judgement.</li>
                 </ul>
                 <div class="notice">
-                    A calibration caveat: arbitrary English text scores roughly 0.10 to 0.15 against
-                    the AI poles simply for being language, so the lower band is a floor effect
-                    rather than a measurement of AI content. Treat small differences near the bottom
-                    of the range as noise.
+                    A calibration caveat, corrected against measurement. This previously said
+                    arbitrary English scores 0.10 to 0.15 against the AI poles as a floor effect.
+                    It does not: neutral English measures about <strong>0.00</strong>, and there is
+                    no uniform floor. What is elevated is text about <em>language</em> specifically.
+                    Non-language software of ordinary specificity sits at 0.10 to 0.14, which is the
+                    band to treat as noise.
                 </div>
 
                 <h3>Human review</h3>
@@ -343,6 +411,6 @@
     <div class="tip" id="tip" role="tooltip" data-open="false"></div>
 
     <script type="application/json" id="dashboard-data">{{ payload }}</script>
-    <script src="/static/dashboard.js"></script>
+    <script src="/static/dashboard.js?v={{ asset_version('dashboard.js') if asset_version is defined else '' }}"></script>
 </body>
 </html>

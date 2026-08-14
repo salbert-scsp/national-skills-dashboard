@@ -85,10 +85,24 @@ RUN_STATE_FILE = os.getenv("INGESTION_RUN_STATE_FILE", "ingestion_run_state.json
 EXPORT_FILE = os.getenv("DASHBOARD_EXPORT_FILE", "dashboard_export.json")
 GEMINI_KEYS_FILE = os.getenv("GEMINI_KEYS_FILE", "gemini_keys.json")
 GEMINI_KEY_STATE_FILE = os.getenv("GEMINI_KEY_STATE_FILE", "gemini_key_state.json")
+# Dated embedded-AI verdicts. Worth persisting separately from the store because a full
+# pass costs about five and a half hours of DuckDuckGo cadence, and losing it would mean
+# paying that again. See embedding_pass.py for the recheck policy that reads the dates.
+EMBEDDING_CACHE_FILE = os.getenv("EMBEDDING_CACHE_FILE", "embedding_probe_cache.json")
 
 # Directory holding the ONNX graphs and the tokenizer. Kept separate from the data
 # paths above because on cloud these do not move to a bucket; they ride in the image.
-MODEL_DIR = os.getenv("MODEL_DIR", ".")
+#
+# DEFAULTS TO THIS FILE'S DIRECTORY, not to ".". The models sit beside the code and never
+# move, so resolving them against the working directory was wrong in a way that only
+# showed up when something started from elsewhere: importing the scorer from any other
+# directory failed at import with "Bi-encoder model './model.onnx' not found in the
+# project root", which reads like a missing file rather than a missing chdir. Running the
+# test suite from outside the project is the case that exposed it.
+#
+# The data paths above deliberately keep their relative defaults: those are per-deployment
+# and are expected to follow the working directory.
+MODEL_DIR = os.getenv("MODEL_DIR", os.path.dirname(os.path.abspath(__file__)))
 BI_MODEL_NAME = "model.onnx"
 CROSS_MODEL_NAME = "cross_encoder_model.onnx"
 TOKENIZER_NAME = "tokenizer.json"
@@ -388,6 +402,41 @@ def load_gemini_keys_raw() -> Any:
     # client = secretmanager.SecretManagerServiceClient()
     # name = f"projects/{GCP_PROJECT}/secrets/gemini-api-keys/versions/latest"
     # return json.loads(client.access_secret_version(name=name).payload.data.decode("utf-8"))
+    raise NotImplementedError(_CLOUD_NOT_READY)
+
+
+def load_embedding_cache() -> Dict[str, Any]:
+    """
+    Dated embedded-AI verdicts, keyed by skill name.
+
+    An unreadable cache is NOT fatal and is not raised. The worst outcome of losing it is
+    re-probing, which costs time and no correctness; refusing to run would cost the whole
+    pass. The recheck policy lives in embedding_pass.py, which owns what a stale verdict
+    means.
+    """
+    if not USE_CLOUD:
+        try:
+            return read_json(EMBEDDING_CACHE_FILE, default={}) or {}
+        except StorageUnreadable:
+            logger.exception(
+                "%s could not be read; every skill will be re-probed.",
+                EMBEDDING_CACHE_FILE,
+            )
+            return {}
+
+    # ---- GOOGLE CLOUD (placeholder) ---------------------------------------
+    # GCS object, alongside the skills store. Not Firestore: this is written once per
+    # pass rather than per decision, and it is read whole.
+    raise NotImplementedError(_CLOUD_NOT_READY)
+
+
+def save_embedding_cache(cache: Dict[str, Any]) -> None:
+    """Persists the dated verdicts."""
+    if not USE_CLOUD:
+        write_json(EMBEDDING_CACHE_FILE, cache)
+        return
+
+    # ---- GOOGLE CLOUD (placeholder) ---------------------------------------
     raise NotImplementedError(_CLOUD_NOT_READY)
 
 

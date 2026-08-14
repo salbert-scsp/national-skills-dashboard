@@ -24,13 +24,23 @@ REASON_PAUSED would be silently overwritten by the next add_targets(REASON_QUOTA
 THE WRITER LOCK
 ---------------
 Also here, because it is the same concern: who is allowed to touch skills_master.json
-right now. Every background writer of the store -- the scrape and the second pass --
-holds STORE_WRITER_LOCK for its whole run. Without it, two of them doing
-load_master -> mutate -> save_master concurrently means whichever saves last silently
-erases the other's work, INCLUDING any human approvals made in between. That hazard
-predates this module; the scrape button is what makes it near-certain rather than rare.
+right now. Two of them doing load_master -> mutate -> save_master concurrently means
+whichever saves last silently erases the other's work, INCLUDING any human approvals
+made in between. That hazard predates this module; the scrape button is what makes it
+near-certain rather than rare.
+
+The lock is held for ONE LOAD-TO-SAVE WINDOW, never for a whole run. The scrape used to
+hold it from start to finish -- of a job the code itself describes as running for weeks
+-- which meant a reviewer could not commit a decision for the duration. It does not need
+to: run_backlog ingests one occupation at a time and each occupation does its own
+load_master ... save_master, so the window that needs protecting is one occupation.
+A reviewer now waits at most that long.
+
+Acquire through acquire_store()/store_writer() rather than touching the lock directly,
+so the holder is recorded and a refusal can say who is holding it.
 """
 
+import contextlib
 import datetime
 import logging
 import threading
@@ -68,10 +78,76 @@ _running = False
 # Set to ask the worker to stop cleanly after the current occupation.
 _stop = threading.Event()
 
-# Held for the whole of any background run that writes skills_master.json. Reentrant is
-# NOT wanted here: a writer that somehow tried to claim it twice is a bug worth
-# deadlocking on in development rather than papering over.
+# Held across one load_master -> mutate -> save_master window, by whoever is in it.
+# Reentrant is NOT wanted here: a writer that somehow tried to claim it twice is a bug
+# worth deadlocking on in development rather than papering over.
+#
+# Not private, because ownership of this concern is the whole point of the module, but
+# callers should use acquire_store()/store_writer() so the holder label is maintained.
 STORE_WRITER_LOCK = threading.Lock()
+
+# What is currently inside that window, for messages. Written only by the holder, so a
+# plain attribute is enough: whoever set it holds the lock, and nobody else may clear it.
+_store_holder: Optional[str] = None
+
+# How long a reviewer's commit waits for a background writer before giving up. Long
+# enough to cover one occupation of a scrape, short enough that the browser is not left
+# hanging if something is genuinely stuck.
+STORE_WAIT_SECONDS = 90.0
+
+
+class StoreBusy(RuntimeError):
+    """Raised by store_writer when the window could not be entered. Carries the holder."""
+
+    def __init__(self, holder: Optional[str]):
+        super().__init__(f"The skills store is being written by {holder or 'another job'}.")
+        self.holder = holder
+
+
+def store_holder() -> Optional[str]:
+    """What is in the store-write window right now, or None."""
+    return _store_holder
+
+
+def acquire_store(label: str, timeout: float = 0.0) -> bool:
+    """
+    Enters the store-write window, recording who is in it.
+
+    timeout=0 means "do not wait", which is what a background job wants: a job that
+    waits is a job nobody knows is waiting. A reviewer-facing request passes a real
+    timeout instead, because a person is holding the page open expecting it to land.
+    """
+    got = (
+        STORE_WRITER_LOCK.acquire(blocking=False)
+        if timeout <= 0
+        else STORE_WRITER_LOCK.acquire(timeout=timeout)
+    )
+    if got:
+        globals()["_store_holder"] = label
+    return got
+
+
+def release_store() -> None:
+    """Leaves the window. Only the holder may call this."""
+    globals()["_store_holder"] = None
+    STORE_WRITER_LOCK.release()
+
+
+@contextlib.contextmanager
+def store_writer(label: str, timeout: float = 0.0):
+    """
+    Scopes one load-to-save window. Raises StoreBusy rather than blocking forever.
+
+    The release is in a finally, so an exception inside the window cannot leave the
+    store locked for the life of the process -- which would wedge every reviewer commit
+    and every subsequent run with nothing to point at.
+    """
+    if not acquire_store(label, timeout=timeout):
+        raise StoreBusy(store_holder())
+    try:
+        yield
+    finally:
+        release_store()
 
 
 def _now() -> str:
