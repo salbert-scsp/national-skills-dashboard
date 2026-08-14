@@ -1,4 +1,6 @@
 """
+STAGE: Storage
+
 Gemini API key pool with daily-quota rotation.
 
 The free tier caps requests per DAY as well as per minute. When a key hits its daily

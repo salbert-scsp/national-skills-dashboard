@@ -1,4 +1,6 @@
 """
+STAGE: Review & Triage
+
 Sends model-written definitions back to be rewritten under the current DEFINITION_SPEC.
 
     python3.11 redraft_definitions.py                  # dry run, writes nothing

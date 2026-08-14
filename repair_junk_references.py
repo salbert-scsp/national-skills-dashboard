@@ -1,4 +1,6 @@
 """
+STAGE: Review & Triage
+
 Clears reference pages that were never about the skill they are attached to.
 
     python3.11 repair_junk_references.py            # dry run, writes nothing

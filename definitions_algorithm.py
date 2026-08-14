@@ -1,4 +1,6 @@
 """
+STAGE: Ingestion
+
 Multi-family O*NET ingestion, writing directly to the local JSON store.
 
 Data flow for one run:

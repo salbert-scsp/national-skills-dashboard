@@ -1,4 +1,6 @@
 """
+STAGE: Scoring Passes
+
 Does batching the credibility audit change its verdicts?
 
     python3.11 audit_ab.py                # 40 skills, mixed

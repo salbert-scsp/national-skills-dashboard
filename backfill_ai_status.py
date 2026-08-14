@@ -1,4 +1,6 @@
 """
+STAGE: Review & Triage
+
 Writes the ai_status tag onto entries settled before the tag existed.
 
     python3.11 backfill_ai_status.py            # dry run, writes nothing

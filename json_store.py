@@ -1,4 +1,6 @@
 """
+STAGE: Storage
+
 The two-file local JSON store.
 
 With no database there is no second copy of anything, so this module is deliberately

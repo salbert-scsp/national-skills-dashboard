@@ -1,4 +1,6 @@
 """
+STAGE: Scoring Passes
+
 Scores generic and enterprise skills as the version people actually deploy.
 
     python3.11 flagship_pass.py                 # dry run, writes nothing, spends nothing

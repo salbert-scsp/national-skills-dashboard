@@ -1,4 +1,6 @@
 """
+STAGE: Storage
+
 The single storage boundary. Every byte this project reads or writes passes through
 here, and nothing else in the codebase opens a file.
 

@@ -1,4 +1,6 @@
 """
+STAGE: Scoring Passes
+
 Establishes which skills actually embed AI, by searching for each one.
 
     python3.11 embedding_pass.py                  # dry run, spends nothing

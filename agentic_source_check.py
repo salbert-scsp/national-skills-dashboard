@@ -1,4 +1,6 @@
 """
+STAGE: Acquisition
+
 Credibility audit layer.
 
 Runs AFTER the cross-encoder has already established that a candidate page is about

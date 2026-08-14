@@ -1,4 +1,6 @@
 """
+STAGE: Web App
+
 One shared password over the review UI. Not user accounts.
 
 The app had no authentication at all before this: its entire security model was

@@ -1,4 +1,6 @@
 """
+STAGE: Acquisition
+
 Establishes whether a product actually ships AI features, by searching for it.
 
     from embedding_probe import search_embedding_evidence

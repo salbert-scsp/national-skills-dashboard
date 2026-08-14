@@ -1,4 +1,6 @@
 """
+STAGE: Acquisition
+
 Candidate acquisition and relevance gating.
 
 Order of operations, which is deliberate:

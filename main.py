@@ -1,4 +1,6 @@
 """
+STAGE: Web App
+
 FastAPI HITL review server.
 
 Running it:

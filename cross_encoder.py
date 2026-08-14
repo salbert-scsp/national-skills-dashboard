@@ -1,4 +1,6 @@
 """
+STAGE: Scoring
+
 Offline cross-encoder relevance scorer (ms-marco-MiniLM-L6-v2).
 
 Answers one question: is this candidate page actually about this skill? It runs

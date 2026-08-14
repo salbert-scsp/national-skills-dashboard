@@ -1,4 +1,6 @@
 """
+STAGE: Scoring Passes
+
 Applies the rules engine to snapshots that were written before it existed.
 
     python3.11 reclassify_snapshots.py            # dry run, writes nothing

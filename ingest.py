@@ -1,4 +1,6 @@
 """
+STAGE: Ingestion
+
 Ingestion entry point.
 
     python3.11 ingest.py                   drain the backlog, then prompt

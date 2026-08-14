@@ -1,4 +1,6 @@
 """
+STAGE: Review & Triage
+
 Human-in-the-loop write actions against the JSON store.
 
 The JSON equivalent of what score.py did for SQL, and the ONLY module that changes a

@@ -1,4 +1,6 @@
 """
+STAGE: Scoring
+
 Offline vector engine: embeddings, anchor poles, scoring, and bucketing.
 
 Replaces Scoring_Algorithm.py. Same offline guarantees, different anchor set.

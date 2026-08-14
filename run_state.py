@@ -1,4 +1,6 @@
 """
+STAGE: Storage
+
 Live state of a web-triggered ingestion run, and the lock that keeps writers apart.
 
 Two halves, on purpose.

@@ -1,4 +1,6 @@
 """
+STAGE: Scoring
+
 Flattening and export layer between the JSON store and the UI.
 
 Joins skills_master.json to skills_timeseries.json and produces plain lists of dicts

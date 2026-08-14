@@ -1,4 +1,6 @@
 """
+STAGE: Storage
+
 Resumable ingestion backlog.
 
 When the Gemini daily quota runs out mid-run, the work that never happened has to go
