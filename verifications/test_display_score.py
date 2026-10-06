@@ -87,8 +87,10 @@ def test_the_named_false_positives_display_below_the_genuine_tools(live_rows):
     """
     scored = {row["skill_name"]: row for row in live_rows}
     genuine = ["spaCy", "XGBoost"]
-    misleading = ["Word processing software", "Transcription system software",
-                  "Telluride Software Classic Trak-It"]
+    # Telluride Software Classic Trak-It was removed from this list on 2026-10-06: since
+    # the 2026-08-14 pole change its raw ai_score is 0.108, so there is no longer an
+    # inversion for the display band to correct.
+    misleading = ["Word processing software", "Transcription system software"]
 
     for name in genuine + misleading:
         assert name in scored, f"{name!r} left the store; this test needs re-anchoring"
@@ -125,9 +127,10 @@ def test_ordering_inside_a_band_still_follows_the_measurement(live_rows):
     # Raw -0.0185. Rule 1 promotes on tech_base/ml_pipeline and never reads ai_score, so
     # an AI Enabling skill can measure below zero. Unclamped this displayed 0.060.
     ("Strategic Reporting Systems ReportSmith", BUCKET_ENABLING),
-    # Raw 0.3549, the highest in its bucket and above the top of the AI Skill bucket's
-    # own minimum. Unclamped this displayed 0.708.
-    ("Transcription system software", BUCKET_ENABLING),
+    # Was AI Enabling at raw 0.3549. Since the 2026-08-14 change it is Not AI at raw
+    # 0.3174 -- above AI_SKILL_THRESHOLD, kept out of the top bucket by the engineering
+    # floor -- so it is still an out-of-range case, now for the Not AI band.
+    ("Transcription system software", BUCKET_NOT_AI),
 ])
 def test_the_real_out_of_range_skills_are_clamped_into_their_band(live_rows, name, bucket):
     scored = {row["skill_name"]: row for row in live_rows}
