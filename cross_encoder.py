@@ -32,7 +32,9 @@ TOKENIZER_PATH = storage.model_path(storage.TOKENIZER_NAME)
 # them would mean swapping one model silently retunes the other.
 MAX_SEQUENCE_LENGTH = 256
 
-if not os.path.exists(CROSS_MODEL_PATH):
+CROSS_MODEL_AVAILABLE = os.path.exists(CROSS_MODEL_PATH)
+
+if not CROSS_MODEL_AVAILABLE and not storage.ALLOW_NO_MODELS:
     raise FileNotFoundError(
         f"Cross-encoder model '{CROSS_MODEL_PATH}' not found in the project root. "
         "cross_encoder_model.onnx (ms-marco-MiniLM-L6-v2) is required to gate page pulls."
@@ -56,7 +58,13 @@ tokenizer.enable_truncation(
 )
 tokenizer.no_padding()
 
-session = ort.InferenceSession(CROSS_MODEL_PATH, providers=["CPUExecutionProvider"])
+# In read-only mode the session is None and score_pair() returns None ("unknown"),
+# which callers already route to manual review rather than treating as a pass.
+session = (
+    ort.InferenceSession(CROSS_MODEL_PATH, providers=["CPUExecutionProvider"])
+    if CROSS_MODEL_AVAILABLE
+    else None
+)
 
 logger.info(
     "Cross-encoder ONNX session loaded offline (max_seq=%d, padding disabled).",
@@ -73,6 +81,9 @@ def score_pair(query: str, candidate_title: str, candidate_text: str) -> Optiona
     manual review rather than substituting a passing score.
     """
     if not query or not candidate_title or not candidate_text:
+        return None
+    if session is None:
+        logger.warning("Cross-encoder unavailable (read-only mode); returning None.")
         return None
 
     try:

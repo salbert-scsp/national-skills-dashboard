@@ -54,6 +54,17 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
+# READ-ONLY MODE. When SKILLS_NO_MODELS=1 is set (in .env or the shell), the scoring
+# modules start without model.onnx / cross_encoder_model.onnx. The dashboard and review
+# queue then run on the scores already stored in the JSON files; anything that needs to
+# embed or cross-encode new text raises ModelsUnavailableError instead. Unset by default,
+# so normal behaviour (fail at import when a model is missing) is unchanged.
+ALLOW_NO_MODELS = os.getenv("SKILLS_NO_MODELS", "").strip().lower() in ("1", "true", "yes")
+
+
+class ModelsUnavailableError(RuntimeError):
+    """Raised when scoring is attempted in read-only mode (SKILLS_NO_MODELS=1)."""
+
 # ==========================================================================
 # THE SWITCH
 # ==========================================================================

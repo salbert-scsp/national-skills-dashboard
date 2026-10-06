@@ -71,3 +71,5 @@ dashboard_export.json
 # OS and editor
 .DS_Store
 .idea/
+*.backup.json
+requirements-local.txt

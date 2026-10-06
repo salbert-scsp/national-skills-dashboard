@@ -219,7 +219,9 @@ SUB_CONCEPTUAL = "Conceptual AI Framework"
 CONFIDENCE_HIGH = "High"
 CONFIDENCE_MARGINAL = "Marginal - Semantic Drift Potential"
 
-if not os.path.exists(BI_MODEL_PATH):
+MODELS_AVAILABLE = os.path.exists(BI_MODEL_PATH)
+
+if not MODELS_AVAILABLE and not storage.ALLOW_NO_MODELS:
     raise FileNotFoundError(
         f"Bi-encoder model '{BI_MODEL_PATH}' not found in the project root. "
         "model.onnx (all-MiniLM-L6-v2) is required for offline scoring."
@@ -237,12 +239,18 @@ tokenizer = Tokenizer.from_file(TOKENIZER_PATH)
 tokenizer.enable_truncation(max_length=MAX_SEQUENCE_LENGTH, direction="right")
 tokenizer.no_padding()
 
-session = ort.InferenceSession(BI_MODEL_PATH, providers=["CPUExecutionProvider"])
-
-logger.info(
-    "Bi-encoder ONNX session loaded offline (max_seq=%d, padding disabled).",
-    MAX_SEQUENCE_LENGTH,
-)
+if MODELS_AVAILABLE:
+    session = ort.InferenceSession(BI_MODEL_PATH, providers=["CPUExecutionProvider"])
+    logger.info(
+        "Bi-encoder ONNX session loaded offline (max_seq=%d, padding disabled).",
+        MAX_SEQUENCE_LENGTH,
+    )
+else:
+    session = None
+    logger.warning(
+        "READ-ONLY MODE: model.onnx not found and SKILLS_NO_MODELS=1. Stored scores "
+        "can be viewed and reviewed; scoring new text is disabled."
+    )
 
 
 def get_embedding(text: str) -> np.ndarray:
@@ -250,6 +258,12 @@ def get_embedding(text: str) -> np.ndarray:
     clean_text = str(text).lower().strip() if text else ""
     if not clean_text:
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
+
+    if session is None:
+        raise storage.ModelsUnavailableError(
+            "Scoring is disabled in read-only mode: add model.onnx to the project "
+            "folder and remove SKILLS_NO_MODELS from .env."
+        )
 
     encoded = tokenizer.encode(clean_text)
 
@@ -384,13 +398,23 @@ LEGACY_STATIC_ANCHOR = (
 
 # Computed once at import and held for the process lifetime. Seven embeddings, not
 # seven per skill.
-AI_ENG_VEC = get_embedding(AI_ENGINEERING_POLE)
-AI_GEN_VEC = get_embedding(AI_GENERATIVE_POLE)
-TECH_BASE_VEC = get_embedding(TECH_BASE_ANCHOR)
-ML_PIPELINE_VEC = get_embedding(ML_PIPELINE_ANCHOR)
-EMBEDDED_AI_VEC = get_embedding(EMBEDDED_AI_ANCHOR)
-CONTRAST_VEC = get_embedding(CONTRAST_TEXT_ANCHOR)
-LEGACY_VEC = get_embedding(LEGACY_STATIC_ANCHOR)
+if MODELS_AVAILABLE:
+    AI_ENG_VEC = get_embedding(AI_ENGINEERING_POLE)
+    AI_GEN_VEC = get_embedding(AI_GENERATIVE_POLE)
+    TECH_BASE_VEC = get_embedding(TECH_BASE_ANCHOR)
+    ML_PIPELINE_VEC = get_embedding(ML_PIPELINE_ANCHOR)
+    EMBEDDED_AI_VEC = get_embedding(EMBEDDED_AI_ANCHOR)
+    CONTRAST_VEC = get_embedding(CONTRAST_TEXT_ANCHOR)
+    LEGACY_VEC = get_embedding(LEGACY_STATIC_ANCHOR)
+else:
+    # Placeholders only: get_embedding() raises before any of these is used.
+    AI_ENG_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    AI_GEN_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    TECH_BASE_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    ML_PIPELINE_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    EMBEDDED_AI_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    CONTRAST_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+    LEGACY_VEC = np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
 logger.info("Seven anchor pole vectors pre-computed and cached in memory.")
 
