@@ -73,3 +73,15 @@ dashboard_export.json
 .idea/
 *.backup.json
 requirements-local.txt
+
+# RESTRICTED: NLx Research Hub job-posting data is covered by a data use agreement and must
+# never be committed. Keep all NLx files under data/nlx/ (outside git) and publish
+# aggregates only.
+data/nlx/
+nlx_*
+*.parquet
+*.pq
+
+# Raw public downloads (BLS, Census, etc.) are re-downloadable; processed outputs in
+# data/processed/ are tracked.
+data/raw/
