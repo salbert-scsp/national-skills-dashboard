@@ -61,6 +61,7 @@ MAX_AGE = 60 * 60 * 12
 # /dashboard-admin if one were ever added.
 PUBLIC_EXACT = frozenset({
     "/dashboard",
+    "/occupations",
     "/report",
     "/login",
     "/logout",

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>National Skills Dashboard - Occupations</title>
+    <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
+</head>
+<body>
+    <header class="topbar">
+        <img class="topbar__logo" src="/static/scsplogo.jpg" alt="SCSP" />
+        <h1>National Skills Dashboard <span>Occupations</span></h1>
+        <div class="spacer"></div>
+        <nav class="chips" aria-label="Views">
+            <a class="chip" href="/dashboard">Skill scores</a>
+            <a class="chip chip--current" href="/occupations" aria-current="page">Occupations</a>
+            <a class="chip" href="/">Review queue</a>
+        </nav>
+    </header>
+
+    <div class="wrap occ">
+        {% if data.missing %}
+            <div class="notice notice--warn">
+                No occupation profiles yet. Build them with
+                <code>python public_data/build_occupation_profiles.py --oews ... --projections ...</code>
+                and reload this page.
+            </div>
+        {% elif data.failed %}
+            <div class="notice notice--error">
+                The occupation profiles could not be read. Check the server log.
+            </div>
+        {% else %}
+
+        <div class="notice notice--warn" role="note">
+            <strong>Provisional.</strong> Shares count each occupation's <em>listed software skills</em>
+            (O*NET Hot Technologies), not the share of workers using AI and not employer demand.
+            Two office tools (Microsoft Excel, Microsoft Office) are classified AI Enabling pending
+            review, so both measures are shown.
+        </div>
+
+        <section class="panel">
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat__value">{{ "{:,}".format(data.summary.occupations) }}</div>
+                    <div class="stat__label">Occupations profiled</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ "%.1f"|format(data.summary.workers / 1000000) }}M</div>
+                    <div class="stat__label">Workers covered (BLS OEWS)</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ "%.1f"|format(data.summary.share_all * 100) }}%</div>
+                    <div class="stat__label">AI / AI Enabling share, worker-weighted</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ "%.1f"|format(data.summary.share_excl_office * 100) }}%</div>
+                    <div class="stat__label">Same, excluding Excel &amp; Office</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <div class="panel__head">
+                <h2>Occupations</h2>
+                <div class="spacer"></div>
+                <span class="topbar__meta" id="occ-count"></span>
+            </div>
+            <p class="panel__note">
+                Click a column to sort and a row for details. Projected change is
+                {{ data.proj_years.base }}–{{ data.proj_years.end }}.
+                "Shared" means BLS publishes the figure only for a combined group of occupations.
+            </p>
+            <div class="filters">
+                <div class="field">
+                    <label for="occ-search">Occupation</label>
+                    <input type="search" id="occ-search" placeholder="e.g. nurse, paralegal, 29-1141" autocomplete="off">
+                </div>
+                <div class="field">
+                    <label for="occ-group">Occupation group</label>
+                    <select id="occ-group"><option value="">All groups</option></select>
+                </div>
+                <div class="field">
+                    <label for="occ-min">Minimum listed skills</label>
+                    <select id="occ-min">
+                        <option value="0">Any</option>
+                        <option value="5">5+</option>
+                        <option value="10" selected>10+</option>
+                        <option value="25">25+</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="occ-measure">Share shown in bars</label>
+                    <select id="occ-measure">
+                        <option value="share_ai_or_enabling_excl_office" selected>Excluding Excel &amp; Office</option>
+                        <option value="share_ai_or_enabling">All listed skills</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="occ__layout">
+                <div class="dtable__wrap occ__table">
+                    <table class="dtable" id="occ-table">
+                        <thead>
+                            <tr>
+                                <th scope="col"><button class="th-sort" data-key="title">Occupation</button></th>
+                                <th scope="col" class="num"><button class="th-sort" data-key="employment">Employment</button></th>
+                                <th scope="col" class="num"><button class="th-sort" data-key="median_annual_wage">Median wage</button></th>
+                                <th scope="col" class="num"><button class="th-sort" data-key="proj_change_pct">Change to {{ data.proj_years.end }}</button></th>
+                                <th scope="col" class="num"><button class="th-sort" data-key="n_skills">Skills</button></th>
+                                <th scope="col"><button class="th-sort" data-key="measure">AI / AI Enabling share</button></th>
+                            </tr>
+                        </thead>
+                        <tbody id="occ-body"></tbody>
+                    </table>
+                </div>
+                <aside class="occ__detail panel" id="occ-detail" aria-live="polite">
+                    <p class="panel__note">Select an occupation to see its AI skills, top AI Enabling tools and BLS figures.</p>
+                </aside>
+            </div>
+        </section>
+
+        <section class="panel prose">
+            <h2>Sources and method</h2>
+            <p>Skill categories come from the AI skills catalog (1,123 reviewed O*NET Hot Technologies).
+               Employment and wages: BLS Occupational Employment and Wage Statistics, May 2025.
+               Projections: BLS Employment Projections {{ data.proj_years.base }}–{{ data.proj_years.end }}.
+               Occupation data: O*NET, U.S. Department of Labor (CC BY 4.0). Worker-weighted shares use
+               occupations with a detailed BLS match.</p>
+        </section>
+        {% endif %}
+    </div>
+
+    <script type="application/json" id="occupations-data">{{ payload }}</script>
+    <script src="/static/occupations.js?v={{ asset_version('occupations.js') if asset_version is defined else '' }}"></script>
+</body>
+</html>

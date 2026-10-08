@@ -745,6 +745,23 @@ def render_dashboard(request: Request):
     )
 
 
+@app.get("/occupations", response_class=HTMLResponse)
+def render_occupations(request: Request):
+    """
+    Occupation profiles: the skill catalog joined to BLS employment, wages and
+    projections (data/processed/occupation_profiles.csv). Public and read-only, like
+    /dashboard.
+    """
+    from occupations_data import load_occupations
+
+    data = load_occupations()
+    return templates.TemplateResponse(
+        request,
+        "occupations.html",
+        {"data": data, "payload": _embed_json(data)},
+    )
+
+
 @app.get("/login", response_class=HTMLResponse)
 def render_login(request: Request, next: str = "/", err: str = None):
     """

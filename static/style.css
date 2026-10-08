@@ -1223,3 +1223,37 @@ body.progressframe {
   .adminpanel__fill { transition: none; }
   .adminpanel__fill--indeterminate { animation: none; width: 100%; opacity: .45; }
 }
+
+/* --- Occupations page -------------------------------------------------------- */
+
+.occ { display: flex; flex-direction: column; gap: var(--gap); }
+.chip--current { background: var(--surface-sunken); font-weight: 650; }
+.occ__layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: var(--gap); margin-top: 14px; align-items: start; }
+@media (max-width: 900px) { .occ__layout { grid-template-columns: minmax(0, 1fr); } }
+.occ__table { max-height: 620px; }
+.th-sort { all: unset; cursor: pointer; font: inherit; text-transform: inherit; letter-spacing: inherit; }
+.th-sort:hover { color: var(--text-primary); }
+.th-sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+th[aria-sort="ascending"] .th-sort::after { content: " ▲"; }
+th[aria-sort="descending"] .th-sort::after { content: " ▼"; }
+.dtable th.num { text-align: right; }
+.occ__row { cursor: pointer; }
+.occ__row:hover td { background: var(--surface-page); }
+.occ__row[aria-current="true"] td { background: var(--surface-page); }
+.occ__row[aria-current="true"] td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+.occ__title { font-weight: 600; color: var(--text-primary); }
+.occ__sub { font-size: 11.5px; color: var(--text-muted); }
+.occ__flag { font-size: 10.5px; color: var(--warning-text); }
+.occ__pos { color: var(--good-text); }
+.occ__neg { color: var(--critical-text); }
+.occ__sharecell { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+.occ__meter { flex: 1 1 auto; height: 8px; background: var(--surface-sunken); border-radius: 4px; overflow: hidden; }
+.occ__fill { height: 100%; background: var(--cat-enabling); }
+.occ__pct { width: 38px; text-align: right; font-variant-numeric: tabular-nums; }
+.occ__detail { position: sticky; top: 12px; }
+.occ__detail h2 { font-size: 16px; margin: 0; }
+.occ__stack { margin-top: 12px; }
+.occ__facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 14px 0; font-size: 13px; }
+.occ__facts dt { color: var(--text-muted); }
+.occ__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+.occ__list { margin-top: 12px; }
