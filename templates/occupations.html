@@ -99,7 +99,15 @@
 
             <div class="occ__layout">
                 <div class="dtable__wrap occ__table">
-                    <table class="dtable" id="occ-table">
+                    <table class="dtable occ__grid" id="occ-table">
+                        <colgroup>
+                            <col class="occ__col-name">
+                            <col class="occ__col-num">
+                            <col class="occ__col-num">
+                            <col class="occ__col-num">
+                            <col class="occ__col-skills">
+                            <col class="occ__col-share">
+                        </colgroup>
                         <thead>
                             <tr>
                                 <th scope="col"><button class="th-sort" data-key="title">Occupation</button></th>
@@ -107,7 +115,7 @@
                                 <th scope="col" class="num"><button class="th-sort" data-key="median_annual_wage">Median wage</button></th>
                                 <th scope="col" class="num"><button class="th-sort" data-key="proj_change_pct">Change to {{ data.proj_years.end }}</button></th>
                                 <th scope="col" class="num"><button class="th-sort" data-key="n_skills">Skills</button></th>
-                                <th scope="col"><button class="th-sort" data-key="measure">AI / AI Enabling share</button></th>
+                                <th scope="col" class="occ__sharehead"><button class="th-sort" data-key="measure">AI / AI Enabling share</button></th>
                             </tr>
                         </thead>
                         <tbody id="occ-body"></tbody>

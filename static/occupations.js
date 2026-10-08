@@ -73,13 +73,19 @@
       tr.appendChild(ch);
       tr.appendChild(el("td", "num", fmtInt.format(r.n_skills || 0)));
       const share = value(r, "measure");
+      const excl = measure.value === "share_ai_or_enabling_excl_office";
+      const other = excl ? r.share_ai_or_enabling : r.share_ai_or_enabling_excl_office;
       const cell = el("td", "occ__sharecell");
+      const top = el("div", "occ__share");
       const meter = el("div", "occ__meter");
       const fill = el("div", "occ__fill");
       fill.style.width = share === null ? "0" : Math.round(share * 100) + "%";
       meter.appendChild(fill);
-      cell.appendChild(meter);
-      cell.appendChild(el("span", "occ__pct", pct(share)));
+      top.appendChild(meter);
+      top.appendChild(el("span", "occ__pct", pct(share)));
+      cell.appendChild(top);
+      cell.appendChild(el("div", "occ__other",
+        (excl ? "With Excel & Office: " : "Without Excel & Office: ") + pct(other)));
       tr.appendChild(cell);
       const open = () => { selected = r.soc_code; showDetail(r); render(); };
       tr.addEventListener("click", open);
@@ -135,7 +141,7 @@
     detail.appendChild(legend);
 
     const dl = el("dl", "occ__facts");
-    kv(dl, "AI / AI Enabling share", pct(r.share_ai_or_enabling) + " of listed skills");
+    kv(dl, "AI / AI Enabling share (all skills)", pct(r.share_ai_or_enabling));
     kv(dl, "Excluding Excel & Office", pct(r.share_ai_or_enabling_excl_office));
     kv(dl, "Employment", (r.employment === null ? "Not published" : fmtInt.format(r.employment)) +
        (r.oews_match === "broad (shared)" ? " (combined BLS group)" : ""));
