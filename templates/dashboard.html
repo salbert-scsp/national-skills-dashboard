@@ -23,14 +23,28 @@
     <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
 </head>
 <body class="skills-dash">
-    <header class="topbar">
-        <img class="topbar__logo" src="/static/scsplogo.jpg" alt="SCSP" />
-        <h1>AI Skills Analytics <span>Skill Scores</span></h1>
-        <div class="spacer"></div>
-        <nav class="chips" aria-label="Views">
-            <a class="chip" href="/occupations">Occupations</a>
-            <a class="chip" href="/">Review queue</a>
-        </nav>
+    {# Every figure in the headline, the overview and the tiles is counted here from the data
+       the page already carries, so none of it can drift from the charts. #}
+    {% set ai_n = (data.buckets | selectattr("category", "equalto", "AI Skill") | first).count %}
+    {% set enabling_n = (data.buckets | selectattr("category", "equalto", "AI Enabling Skill") | first).count %}
+    {% set near_n = data.skills | selectattr("in_semantic_variance_band") | list | length %}
+    {% set unchecked_n = data.skills | selectattr("embeds_ai", "none") | list | length %}
+    {% set s = data.summary %}
+    <header class="mast">
+        <div class="mast__in">
+            <div class="mast__bar">
+                <img class="mast__logo" src="/static/scsplogo.jpg" alt="SCSP" />
+                <span class="mast__name">AI Skills Analytics</span>
+                <nav class="mast__nav" aria-label="Views">
+                    <a href="/occupations">Occupations</a>
+                    <a href="/">Review queue</a>
+                </nav>
+            </div>
+            <h1 class="mast__headline">Of {{ "{:,}".format(s.skills_scored) }} software skills scored, the model classes
+                {{ "{:,}".format(ai_n) }} as AI skills and {{ "{:,}".format(enabling_n) }} as AI-enabling;
+                {{ "{:,}".format(near_n) }} sit close to a category boundary.</h1>
+            <p class="mast__sub">Classes are the output of a text-similarity model, not an expert verdict. They describe skills, not jobs.</p>
+        </div>
     </header>
 
     <div class="wrap">
@@ -40,57 +54,59 @@
             </div>
         {% endif %}
 
-        <!--
-            Overview. Plain prose, above the KPI row, so a first-time reader knows what
-            they are looking at before they meet any numbers. Placeholder text is a
-            deliberate stand-in for copy the user is writing by hand.
-        -->
-        <section class="panel prose">
-            <h2>Overview</h2>
-            <p>To understand how artificial intelligence is reshaping the workforce, we must look past
-                job titles and measure the day-to-day transformation of actual workplace tasks. Rather
-                than relying on macro labor statistics, this dashboard provides a granular view of the
-                market's evolving technological makeup by quantifying the direct semantic overlap between
-                daily workplace software skills and modern AI capabilities. With widespread AI adoption,
-                workers face a more immediate question than "Will AI take my job?": "Which parts of my
-                job will now be allocated to a machine?" This dashboard categorizes skills into three
-                distinct buckets: AI Skills which build the engine, AI Enabling Skills that connect and
-                run the engine, and Non-AI Skills represent standard operations and human domain expertise.</p>
-                <h2>How to Read</h2>
-                <p>Each skill is categorized into one of three AI-proximity buckets. AI Skills build
-                the engine—specialized tools like machine learning frameworks and neural network
-                libraries that few workers use directly but form the foundation of all AI systems.
-                AI Enabling Skills connect and run the engine—cloud infrastructure, data pipelines,
-                APIs, and embedded AI features in everyday software that enable workers without deep
-                technical backgrounds to orchestrate AI workflows. Non-AI Skills represent standard
-                operations and human domain expertise—legacy tools and tasks anchored to human judgment
-                that remain largely unaffected by current AI developments. The bars show each skill's
-                AI relevance within the current view, using an absolute banded scale: AI Skills score
-                0.70 to 1.00, AI Enabling Skills score 0.30 to 0.69, and Non-AI Skills score 0.00
-                to 0.29. Looking at which skills dominate a role or occupation helps identify where
-                proactive upskilling toward AI-enabled workflows offers the highest strategic value.</p>
+        <section class="panel intro" aria-labelledby="intro-h">
+            <h2 id="intro-h" class="sr-only">About this page</h2>
+            <p class="intro__lead">Each software skill that O*NET marks as a hot technology, one employers list often in
+                job postings, is scored by how closely its description matches AI engineering and generative AI.
+                A high score describes the skill. It does not mean a job will be replaced.</p>
+            <details class="intro__more">
+                <summary>How to read this page</summary>
+                <dl class="intro__terms">
+                    <dt>Raw AI score</dt>
+                    <dd>The model's measurement: the closest match between a skill's name and definition and
+                        descriptions of AI engineering and generative AI. Bars show it directly, from 0 to 0.7.</dd>
+                    <dt>AI Skill</dt>
+                    <dd>Tools and libraries for building or using AI, such as TensorFlow and ChatGPT. A skill needs a raw score of
+                        {{ "%.2f"|format(s.ai_threshold) }} or more and an AI-engineering signal.</dd>
+                    <dt>AI Enabling</dt>
+                    <dd>Infrastructure that supports AI work, such as cloud, data pipelines and ML tooling. It is decided
+                        by technical-backbone and ML-pipeline signals, so it has no raw-score line. The class also includes some general programming tools, such as Delphi and Smalltalk, that the model groups with AI infrastructure; these are under review.</dd>
+                    <dt>Below AI threshold</dt>
+                    <dd>Everything else. It means the model did not find the skill AI-related, not that it has been shown not to be.</dd>
+                    <dt>Near a boundary (◇)</dt>
+                    <dd>The deciding measurement was within 0.03 of its line, so a small change in the score could change
+                        the class. {{ "{:,}".format(near_n) }} of {{ "{:,}".format(s.skills_scored) }} skills are marked.</dd>
+                    <dt>Embedded AI</dt>
+                    <dd>Whether a tool ships AI features has been checked for {{ "{:,}".format(s.skills_scored - unchecked_n) }}
+                        of {{ "{:,}".format(s.skills_scored) }} skills.</dd>
+                </dl>
+            </details>
         </section>
 
-        <!-- KPI row. Four headline numbers, so a row of stat tiles rather than a chart. -->
+        <!-- KPI row: four headline numbers, so tiles rather than a chart. -->
         <section class="panel">
             <div class="stats">
                 <div class="stat">
-                    <div class="stat__value">{{ data.summary.skills_scored }}</div>
+                    <div class="stat__value">{{ "{:,}".format(s.skills_scored) }}</div>
                     <div class="stat__label">Skills scored</div>
                 </div>
                 <div class="stat">
-                    <div class="stat__value">{{ data.summary.tools_discovered }}</div>
-                    <div class="stat__label">Tools discovered</div>
-                </div>
-                <div class="stat">
-                    <div class="stat__value">{{ data.summary.occupations_covered }}</div>
+                    <div class="stat__value">{{ "{:,}".format(s.occupations_covered) }}</div>
                     <div class="stat__label">Occupations covered</div>
                 </div>
                 <div class="stat">
-                    <div class="stat__value">{{ data.summary.at_ai_threshold }}</div>
-                    <div class="stat__label">At or above {{ "%.2f"|format(data.summary.ai_threshold) }} raw</div>
+                    <div class="stat__value">{{ "{:,}".format(ai_n) }}</div>
+                    <div class="stat__label">Classed as AI Skill</div>
+                </div>
+                <div class="stat">
+                    <div class="stat__value">{{ "{:,}".format(enabling_n) }}</div>
+                    <div class="stat__label">Classed as AI Enabling</div>
                 </div>
             </div>
+            <p class="stats__note">Of {{ "{:,}".format(s.tools_discovered) }} tools discovered,
+                {{ "{:,}".format(s.skills_scored) }} are approved and scored;
+                {{ "{:,}".format(s.not_audited) }} have not been audited yet,
+                {{ "{:,}".format(s.pending_review) }} await review and {{ "{:,}".format(s.rejected) }} were rejected.</p>
         </section>
 
         <div class="tabs" role="tablist">

@@ -1330,3 +1330,38 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; }
 .skills-dash .bar__name { flex: 1 1 auto; min-width: 0; }
 /* A hairline around the track so it stays visible on the dark navy card. */
 .skills-dash .bar__track { box-shadow: inset 0 0 0 1px var(--border); }
+
+/* --- Dashboard redesign, batch 2: masthead, headline, overview, KPI tiles ----------
+   Masthead is the approved prototype's: navy, 4px rule in the brand red, a display-type
+   headline written from the data. #00334e is already this palette's navy; no new colour. */
+.skills-dash { --masthead: #00334e; --on-masthead: #ffffff; --on-masthead-2: rgba(255, 255, 255, 0.82); }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.mast { background: var(--masthead); color: var(--on-masthead); border-bottom: 4px solid var(--brand); }
+.mast__in { max-width: 1180px; margin: 0 auto; padding: 8px 20px 30px; }
+.mast__bar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding-bottom: 20px; }
+.mast__logo { height: 30px; width: auto; display: block; border-radius: 3px; background: #ffffff; padding: 2px; }
+.mast__name { font-family: var(--font-display); font-weight: 700; font-size: 24px; letter-spacing: 0.01em; }
+.mast__nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.mast__nav a { color: var(--on-masthead); text-decoration: none; opacity: 0.8; padding: 9px 12px 7px; border-bottom: 3px solid transparent; font-size: 15px; }
+.mast__nav a:hover { opacity: 1; border-bottom-color: var(--on-masthead-2); }
+.mast a:focus-visible { outline: 2px solid var(--on-masthead); outline-offset: 2px; }
+.mast__headline { font-family: var(--font-display); font-weight: 600; font-size: clamp(30px, 3.9vw, 48px); line-height: 1.08; max-width: 26em; text-wrap: balance; letter-spacing: 0.005em; }
+.mast__sub { margin: 14px 0 0; font-size: 15.5px; line-height: 1.5; color: var(--on-masthead-2); max-width: 62ch; }
+@media (max-width: 640px) { .mast__nav { margin-left: 0; width: 100%; } .mast__in { padding-inline: 16px; } }
+
+.intro { display: grid; gap: 10px; }
+.intro__lead { margin: 0; font-size: 17px; line-height: 1.6; max-width: 66ch; color: var(--text-primary); }
+.intro__more { border: 0; }
+.intro__more summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 6px 0; color: var(--accent); width: fit-content; }
+.intro__more summary:hover { color: var(--brand-ink); }
+.intro__terms { display: grid; grid-template-columns: minmax(150px, 210px) minmax(0, 66ch); gap: 10px 24px; margin: 10px 0 4px; }
+.intro__terms dt { font-weight: 600; font-size: 14.5px; }
+.intro__terms dd { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--text-secondary); }
+@media (max-width: 640px) { .intro__terms { grid-template-columns: 1fr; gap: 2px; } .intro__terms dd { margin-bottom: 10px; } }
+
+.skills-dash .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; }
+.skills-dash .stat__value { font-size: 44px; font-weight: 600; line-height: 1; }
+.skills-dash .stat__label { margin-top: 6px; font-size: 14px; text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-secondary); }
+.stats__note { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px; line-height: 1.5; color: var(--text-secondary); padding-right: max(0px, calc(100% - 80ch)); }
+@media (max-width: 640px) { .skills-dash .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skills-dash .stat__value { font-size: 38px; } }
