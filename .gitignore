@@ -85,3 +85,6 @@ nlx_*
 # Raw public downloads (BLS, Census, etc.) are re-downloadable; processed outputs in
 # data/processed/ are tracked.
 data/raw/
+
+# Local previews and the scripts that build them; never committed.
+share/
