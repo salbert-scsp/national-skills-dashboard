@@ -1279,3 +1279,54 @@ th[aria-sort="descending"] .th-sort::after { content: " ▼"; }
 .occ__facts dt { color: var(--text-muted); }
 .occ__facts dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; font-weight: 600; }
 .occ__list { margin-top: 12px; }
+
+/* --- Dashboard redesign, batch 1: type and the ranked list -------------------------
+   Scoped to body.skills-dash so the review queue and login, which share this file, are
+   untouched until they are redone. Reuses the approved prototype's faces (Barlow Condensed
+   for headings and numbers, Public Sans for text) and the existing --cat-* tokens. */
+.skills-dash {
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", sans-serif;
+  --font-body: "Public Sans", -apple-system, "Segoe UI", Helvetica, sans-serif;
+  font-family: var(--font-body);
+}
+.skills-dash h1, .skills-dash h2, .skills-dash h3, .skills-dash .stat__value { font-family: var(--font-display); }
+.skills-dash .panel__head h2 { font-size: 26px; font-weight: 600; letter-spacing: 0.01em; line-height: 1.1; }
+.skills-dash .panel__note { font-size: 14px; line-height: 1.55; color: var(--text-secondary); max-width: 78ch; }
+.skills-dash .panel__note em { font-style: normal; font-weight: 600; color: var(--text-primary); }
+.skills-dash .ghost { font-family: var(--font-body); }
+
+/* Bars are the raw score on a fixed 0 to 0.7 axis; class is the fill colour. */
+.skills-dash .bar__fill--ai { background: var(--cat-ai); }
+.skills-dash .bar__fill--enabling { background: var(--cat-enabling); }
+.skills-dash .bar__fill--nonai { background: var(--cat-nonai); }
+.skills-dash .bar__track { height: 12px; }
+.skills-dash .bar__cut {
+  position: absolute; top: -2px; bottom: -2px; left: var(--cut, 41.43%);
+  width: 2px; margin-left: -1px; background: var(--text-primary);
+}
+.skills-dash .bar__value { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.bar__near { flex: 0 0 auto; font-size: 13px; line-height: 1; color: var(--text-secondary); }
+.legend__near { flex: 0 0 auto; width: 10px; text-align: center; font-size: 13px; line-height: 1; color: var(--text-secondary); }
+
+/* The axis row repeats the bar grid so its ticks sit over the tracks, and stays put while
+   the list scrolls under it. */
+.bars__axis {
+  position: sticky; top: 0; z-index: 1;
+  display: grid; grid-template-columns: minmax(120px, 210px) 1fr 3.6em; gap: 12px;
+  padding: 0 4px 2px; background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+.bars__scale { position: relative; height: 18px; min-width: 40px; }
+.bars__tick {
+  position: absolute; top: 0; transform: translateX(-50%); white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums;
+}
+.bars__tick:first-child { transform: none; }
+.bars__tick--end { transform: translateX(-100%); }
+@media (max-width: 640px) {
+  .bars__axis { grid-template-columns: 1fr 3.6em; }
+  .bars__axis > :first-child { display: none; }
+}
+/* The near-boundary mark sits in its own column at the end of the label, so it lines up row to row. */
+.skills-dash .bar__name { flex: 1 1 auto; min-width: 0; }
+/* A hairline around the track so it stays visible on the dark navy card. */
+.skills-dash .bar__track { box-shadow: inset 0 0 0 1px var(--border); }

@@ -3,11 +3,10 @@
  * The server embeds every scored skill as JSON in the page, so filtering, sorting and
  * drill-down are local and instant. Two rules hold throughout:
  *
- *   1. Everything a reader sees is display_ai_score: a score banded by class, computed
- *      server-side in dashboardtables.py. It is ABSOLUTE -- the same skill reads the same
- *      number in every view -- which the min-max normalizer it replaced was not. Bar
- *      length, the table column, the tooltip and the sort key are all this one value, so
- *      they cannot disagree.
+ *   1. Bars, sort order, the table and the tooltip lead with the RAW score (ai_score), the
+ *      model's own measurement, on a fixed 0 to 0.7 axis. display_ai_score, the per-class
+ *      rescale computed in dashboardtables.py, appears only in the tooltip and the drawer,
+ *      labelled as rescaled, so it cannot be mistaken for a second measurement.
  *   2. AI category is decided server-side from the RAW score and is never re-derived
  *      here. Bucketing anything client-side would make a skill's class change as the
  *      filters change, and bucketing the BANDED score would be circular besides.
@@ -41,6 +40,27 @@
 
   function suffixFor(category) {
     return CAT_SUFFIX[category] || "nonai";
+  }
+
+  /* What a reader sees. The server's class names are unchanged (the CSV, the review queue
+   * and the stored snapshots all use them); only this view renames the bottom class,
+   * because "Not AI Skill" states a finding where the model only says a skill falls below
+   * its AI cut-off. */
+  var CAT_LABEL = { "Not AI Skill": "Below AI threshold" };
+  function labelFor(category) {
+    return CAT_LABEL[category] || category;
+  }
+
+  /* The one raw cut-off that governs a class on its own: raw >= 0.29 AND the AI engineering
+   * signal >= 0.14 makes an AI Skill (sortingalgorithmnew.py, rule 0). The enabling class is
+   * decided by technical-backbone and ML-pipeline signals, not by a raw-score line, so no
+   * second line is drawn. RAW_MAX fixes the axis so a bar means the same in every view. */
+  var AI_CUTOFF = (DATA.summary && DATA.summary.ai_threshold) || 0.29;
+  var RAW_MAX = 0.7;
+  var NEAR_DELTA = 0.03;
+
+  function nearBoundary(skill) {
+    return skill.in_semantic_variance_band === true;
   }
 
   var activeCategories = new Set(CATEGORIES);
@@ -102,18 +122,20 @@
 
   var tip = document.getElementById("tip");
 
-  function showTip(event, skill, normalized) {
+  function showTip(event, skill) {
     while (tip.firstChild) tip.removeChild(tip.firstChild);
     tip.appendChild(el("strong", null, skill.skill_name));
 
     var dl = document.createElement("dl");
-    /* Matched to the drawer and the table: the banded score, the class, and the two facts
-     * a reader can act on. The raw pole similarities that used to sit here are internal
-     * diagnostics -- see compute_display_ai_score. */
+    /* Raw first: it is the measurement. The display score is a rescale that puts each class
+     * in its own band so tiers sort apart, and it says so here rather than reading as a
+     * second, truer number. */
     [
-      ["AI Score", fmt(normalized, 2)],
-      ["Class", skill.category_bucket],
-      ["AI Embedded", embedTagText(skill.embeds_ai)],
+      ["Raw AI score", fmt(skill.ai_score, 2)],
+      ["Class", labelFor(skill.category_bucket)],
+      ["Near a boundary", nearBoundary(skill) ? "Yes, within " + NEAR_DELTA.toFixed(2) + " of the line that decided its class" : "No"],
+      ["Display score (rescaled)", fmt(skill.display_ai_score, 2)],
+      ["Embedded AI", embedTagText(skill.embeds_ai)],
       ["Occupations", String(skill.occupations.length)]
     ].forEach(function (pair) {
       dl.appendChild(el("dt", null, pair[0]));
@@ -166,7 +188,7 @@
      * inputs to the score when they are not. Embedded AI in particular is a number that
      * now decides nothing, and printing it beside the class invited exactly the
      * conclusion that it caused it. */
-    pair("AI class", skill.category_bucket);
+    pair("AI class", labelFor(skill.category_bucket));
 
     /* The BANDED score, not the raw cosine -- see compute_display_ai_score. A raw cosine
      * runs negative and is not a percentage, so the drawer used to print an AI Enabling
@@ -382,19 +404,32 @@
 
   // --------------------------------------------------------------- bar charts
 
-  /* Renders one bar per skill, on the BANDED display score.
-   *
-   * This used to normalize min-max across whatever was currently filtered, which meant
-   * the same skill drew a different bar in different views -- the top skill in any slice
-   * always drew a full bar, whether it scored 0.73 or 0.11. The display score is absolute,
-   * so bar length now means the same thing everywhere and tier ordering is visible in the
-   * chart itself. */
+  /* Renders one bar per skill on the RAW score, 0 to RAW_MAX, coloured by class. The
+   * display score is not drawn: it rescales each class into its own band, so a raw 0.28
+   * (Delphi) reads 0.61 beside a raw 0.63 (ChatGPT) at 0.92. Bar length here is the
+   * measurement itself, with the 0.29 AI Skill line marked on every track. A negative raw
+   * score draws no bar and is written as it is. */
   function renderBars(container, skills) {
     while (container.firstChild) container.removeChild(container.firstChild);
 
+    container.style.setProperty("--cut", (AI_CUTOFF / RAW_MAX * 100).toFixed(2) + "%");
+    var axis = el("li", "bars__axis");
+    axis.setAttribute("aria-hidden", "true");
+    axis.appendChild(el("span"));
+    var scale = el("div", "bars__scale");
+    [[0, "0"], [AI_CUTOFF, AI_CUTOFF.toFixed(2) + " AI Skill line"], [RAW_MAX, RAW_MAX.toFixed(1)]].forEach(function (t) {
+      var tick = el("span", "bars__tick", t[1]);
+      tick.style.left = (t[0] / RAW_MAX * 100).toFixed(2) + "%";
+      if (t[0] === RAW_MAX) tick.classList.add("bars__tick--end");
+      scale.appendChild(tick);
+    });
+    axis.appendChild(scale);
+    axis.appendChild(el("span"));
+    container.appendChild(axis);
+
     skills.forEach(function (skill) {
-      var value = skill.display_ai_score === null || skill.display_ai_score === undefined
-        ? 0 : skill.display_ai_score;
+      var raw = skill.ai_score === null || skill.ai_score === undefined ? null : skill.ai_score;
+      var near = nearBoundary(skill);
 
       var row = el("li");
       var button = el("button", "bar");
@@ -403,25 +438,34 @@
       var label = el("div", "bar__label");
       label.appendChild(el("span", "bar__swatch bar__swatch--" + suffixFor(skill.category_bucket)));
       label.appendChild(el("span", "bar__name", skill.skill_name));
+      if (near) {
+        var mark = el("span", "bar__near", "\u25C7");
+        mark.title = "Near a category boundary";
+        mark.setAttribute("aria-hidden", "true");
+        label.appendChild(mark);
+      }
 
       var track = el("div", "bar__track");
-      var fill = el("span", "bar__fill");
-      fill.style.width = (value * 100).toFixed(2) + "%";
+      var fill = el("span", "bar__fill bar__fill--" + suffixFor(skill.category_bucket));
+      var share = raw === null ? 0 : Math.max(0, Math.min(raw, RAW_MAX)) / RAW_MAX;
+      fill.style.width = (share * 100).toFixed(2) + "%";
       track.appendChild(fill);
+      track.appendChild(el("span", "bar__cut"));
 
       button.appendChild(label);
       button.appendChild(track);
-      button.appendChild(el("div", "bar__value", fmt(value, 2)));
+      button.appendChild(el("div", "bar__value", raw === null ? "n/a" : fmt(raw, 2)));
 
       button.setAttribute(
         "aria-label",
-        skill.skill_name + ", " + skill.category_bucket + ", AI Score " + fmt(value, 2)
+        skill.skill_name + ", " + labelFor(skill.category_bucket) + ", raw AI score " + fmt(raw, 2)
+          + (near ? ", near a category boundary" : "")
       );
 
-      button.addEventListener("mouseenter", function (e) { showTip(e, skill, value); });
+      button.addEventListener("mouseenter", function (e) { showTip(e, skill); });
       button.addEventListener("mousemove", moveTip);
       button.addEventListener("mouseleave", hideTip);
-      button.addEventListener("focus", function (e) { showTip(e, skill, value); });
+      button.addEventListener("focus", function (e) { showTip(e, skill); });
       button.addEventListener("blur", hideTip);
       button.addEventListener("click", function () { hideTip(); openDrawer(skill); });
 
@@ -435,8 +479,10 @@
 
     var table = el("table", "dtable");
     table.appendChild(el("caption", null,
-      "AI Score is banded by class: AI Skill 0.70-1.00, AI Enabling 0.30-0.69, "
-      + "Not AI below 0.30. It is absolute, so it does not change with the filter."));
+      "Raw AI score is the model's cosine measurement. An AI Skill needs a raw score of "
+      + AI_CUTOFF.toFixed(2) + " or more and an AI-engineering signal; the other classes are decided by "
+      + "other signals. Near a boundary means the deciding measurement was within "
+      + NEAR_DELTA.toFixed(2) + " of its line."));
 
     var head = document.createElement("thead");
     var hrow = document.createElement("tr");
@@ -445,7 +491,7 @@
      * "Confidence" go now, for the same reason -- they are internal diagnostics, and a
      * reader-facing table that prints them invites the conclusion that they decided the
      * class. All five remain on the snapshot, in the CSV export and on the review queue. */
-    ["Skill", "Class", "AI Score", "AI Embedded", "Occupations"]
+    ["Skill", "Class", "Raw AI score", "Near a boundary", "Embedded AI", "Occupations"]
       .forEach(function (name) { hrow.appendChild(el("th", null, name)); });
     head.appendChild(hrow);
     table.appendChild(head);
@@ -454,8 +500,9 @@
     skills.forEach(function (skill) {
       var tr = document.createElement("tr");
       tr.appendChild(el("td", null, skill.skill_name));
-      tr.appendChild(el("td", null, skill.category_bucket));
-      tr.appendChild(el("td", "num", fmt(skill.display_ai_score, 2)));
+      tr.appendChild(el("td", null, labelFor(skill.category_bucket)));
+      tr.appendChild(el("td", "num", fmt(skill.ai_score, 2)));
+      tr.appendChild(el("td", null, nearBoundary(skill) ? "Yes" : "No"));
       tr.appendChild(el("td", embedTagClass(skill.embeds_ai), embedTagText(skill.embeds_ai)));
       tr.appendChild(el("td", "num", String(skill.occupations.length)));
       body.appendChild(tr);
@@ -473,10 +520,17 @@
     CATEGORIES.forEach(function (category) {
       var item = el("span", "legend__item");
       item.appendChild(el("span", "legend__swatch legend__swatch--" + suffixFor(category)));
-      item.appendChild(el("span", null, category));
+      item.appendChild(el("span", null, labelFor(category)));
       item.appendChild(el("span", "legend__count", counts[category]));
       container.appendChild(item);
     });
+
+    var near = skills.filter(nearBoundary).length;
+    var flag = el("span", "legend__item");
+    flag.appendChild(el("span", "legend__near", "\u25C7"));
+    flag.appendChild(el("span", null, "Near a category boundary"));
+    flag.appendChild(el("span", "legend__count", near));
+    container.appendChild(flag);
   }
 
   // ------------------------------------------------------------ ranked panel
@@ -488,6 +542,7 @@
   var searchInput = document.getElementById("skill-search");
   var sortSelect = document.getElementById("ranked-sort");
   var rankedCount = document.getElementById("ranked-count");
+  var rankedUnchecked = document.getElementById("ranked-unchecked");
 
   /* Sorts a copy, never SKILLS itself: the role panel and the trend selector read the
    * same array, and reordering it in place would silently reorder them too.
@@ -497,36 +552,22 @@
    * dashboard_data.py's INNER JOIN excludes them, so this is belt and braces.)
    *
    * Ties break on name so the order is total and does not shuffle between redraws. */
-  /* Sorts on the BANDED score, with the raw score breaking its ties.
-   *
-   * Sorting on the raw score put Transcription system software (0.3549) above spaCy
-   * (0.2952) even though one is an AI Skill and the other is not -- the top bucket also
-   * asks the engineering pole, and the raw number cannot show that. On the banded score
-   * the tiers group, which is the whole point of the band.
-   *
-   * The raw score is the tie-break rather than the name because the banded score is
-   * rounded to two decimals, so a whole tier would otherwise collapse into alphabetical
-   * order and lose the ranking inside it. The name is still the final tie-break, so the
-   * order stays total and does not shuffle between redraws. */
+  /* Sorts on the RAW score, so list order and bar length agree. The banded display score
+   * grouped tiers (Delphi at raw 0.28 sat above Transcription software at raw 0.32 because
+   * one is Enabling and one is not) which was right for a banded bar and would now draw a
+   * bar that gets longer further down. Class is shown by colour, so a skill that scores
+   * high but is not classed AI Skill appears in place, in its own colour. The name is the
+   * final tie-break, so the order is total and does not shuffle between redraws. */
   function sortSkills(skills, direction) {
     var sign = direction === "asc" ? 1 : -1;
-    function keyOf(skill) {
-      var v = skill.display_ai_score;
-      return v === null || v === undefined ? null : v;
-    }
     return skills.slice().sort(function (a, b) {
-      var av = keyOf(a), bv = keyOf(b);
-      var aNull = av === null;
-      var bNull = bv === null;
+      var av = a.ai_score, bv = b.ai_score;
+      var aNull = av === null || av === undefined;
+      var bNull = bv === null || bv === undefined;
       if (aNull && bNull) return a.skill_name.localeCompare(b.skill_name);
       if (aNull) return 1;
       if (bNull) return -1;
       if (av !== bv) return (av - bv) * sign;
-
-      var ar = a.ai_score, br = b.ai_score;
-      if (ar !== null && ar !== undefined && br !== null && br !== undefined && ar !== br) {
-        return (ar - br) * sign;
-      }
       return a.skill_name.localeCompare(b.skill_name);
     });
   }
@@ -553,6 +594,14 @@
      * ten visible rows read as ten results. Sorting low-to-high changes which end is at
      * the top but never how many there are, so the count is a filter readout only. */
     var total = SKILLS.filter(function (s) { return s.is_hot_tech_anywhere; }).length;
+    /* Said once, above the list, rather than as a tag on every row: when the answer is the
+     * same for nearly every skill, repeating it hides the rows that differ. */
+    var unchecked = SKILLS.filter(function (s) { return s.embeds_ai !== true && s.embeds_ai !== false; }).length;
+    var nf = new Intl.NumberFormat("en-US");
+    rankedUnchecked.textContent = unchecked === 0 ? "" :
+      (unchecked === SKILLS.length ? "Embedded AI has not been checked for any of the " + nf.format(SKILLS.length) + " skills"
+        : "Embedded AI has not been checked for " + nf.format(unchecked) + " of " + nf.format(SKILLS.length) + " skills")
+      + ", so no class here rests on a confirmed embedded-AI feature for them.";
     if (!selection.length) {
       rankedCount.textContent = "";
     } else if (selection.length === total) {
@@ -571,7 +620,7 @@
     chip.type = "button";
     chip.setAttribute("aria-pressed", "true");
     chip.appendChild(el("span", "legend__swatch legend__swatch--" + suffixFor(category)));
-    chip.appendChild(el("span", null, category));
+    chip.appendChild(el("span", null, labelFor(category)));
     chip.addEventListener("click", function () {
       if (activeCategories.has(category)) {
         activeCategories.delete(category);
@@ -615,19 +664,19 @@
       var share = total ? bucket.count / total : 0;
       var seg = el("div", "stack__seg stack__seg--" + suffixFor(bucket.category));
       seg.style.width = (share * 100).toFixed(2) + "%";
-      seg.title = bucket.category + ": " + bucket.count;
+      seg.title = labelFor(bucket.category) + ": " + bucket.count;
       stack.appendChild(seg);
 
       var item = el("span", "legend__item");
       item.appendChild(el("span", "legend__swatch legend__swatch--" + suffixFor(bucket.category)));
-      item.appendChild(el("span", null, bucket.category));
+      item.appendChild(el("span", null, labelFor(bucket.category)));
       item.appendChild(el("span", "legend__count",
         bucket.count + (total ? " (" + (share * 100).toFixed(0) + "%)" : "")));
       legend.appendChild(item);
     });
 
     stack.setAttribute("aria-label", buckets.map(function (b) {
-      return b.category + " " + b.count;
+      return labelFor(b.category) + " " + b.count;
     }).join(", "));
   }
 
@@ -649,7 +698,7 @@
     var tb = document.createElement("tbody");
     buckets.forEach(function (bucket) {
       var tr = document.createElement("tr");
-      tr.appendChild(el("td", null, bucket.category));
+      tr.appendChild(el("td", null, labelFor(bucket.category)));
       tr.appendChild(el("td", "num", String(bucket.count)));
       tr.appendChild(el("td", "num", total ? ((bucket.count / total) * 100).toFixed(1) + "%" : "n/a"));
       tb.appendChild(tr);
@@ -734,24 +783,9 @@
       });
     }
 
-    /* SORTED HERE, on the same key the ranked panel uses.
-     *
-     * The server hands the payload over sorted by RAW ai_score, and this panel used to
-     * inherit that order without re-sorting. It looked ordered only by accident: the bars
-     * were view-normalized min-max, which is monotonic in the raw score, so raw order and
-     * displayed order agreed.
-     *
-     * display_ai_score is banded by class and is NOT monotonic in the raw score -- an AI
-     * Enabling skill at raw 0.10 displays 0.42, above a Not AI skill at raw 0.28 which
-     * displays 0.28. Inheriting raw order therefore paints the numbers out of sequence,
-     * which is what made a sliced role list unreadable.
-     *
-     * sortSkills also groups the tiers, so a role's AI Skills lead its list.
-     *
-     * Always descending, NOT sortSelect.value. That control lives in the ranked panel's
-     * filters on a different tab, and changing it does not redraw this one -- reading it
-     * here would leave the two panels disagreeing until the next slice. This panel has no
-     * sort control of its own, so it gets the one order worth defaulting to. */
+    /* SORTED HERE, on the same key the ranked panel uses (raw score), so a bar never gets
+     * longer further down the list. Always descending, NOT sortSelect.value: that control
+     * lives in the ranked panel on a different tab and does not redraw this one. */
     selection = sortSkills(selection, "desc");
 
     renderBars(roleBars, selection);

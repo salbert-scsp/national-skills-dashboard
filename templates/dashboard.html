@@ -13,9 +13,16 @@
         but main.py is only re-read on restart, and without the guard that ordinary skew
         is a 500 on the whole page rather than an unstamped URL.
     -->
+    <!-- Prototype typefaces, as on the approved prototype (Barlow Condensed for headings and
+         numbers, Public Sans for text). Google Fonts is for prototypes only: self-host both
+         as woff2 under static/fonts/ before this ships, so visitors' IPs are not sent to a
+         third party. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="/static/style.css?v={{ asset_version('style.css') if asset_version is defined else '' }}">
 </head>
-<body>
+<body class="skills-dash">
     <header class="topbar">
         <img class="topbar__logo" src="/static/scsplogo.jpg" alt="SCSP" />
         <h1>AI Skills Analytics <span>Skill Scores</span></h1>
@@ -130,10 +137,13 @@
                     <button class="ghost" data-table-toggle="ranked" aria-pressed="false">Table view</button>
                 </div>
                 <p class="panel__note">
-                    Skills that are Hot Tech for at least one occupation, ranked by AI relevance.
-                    AI Score is banded by class: AI Skill 0.70–1.00, AI Enabling 0.30–0.69, Not AI
-                    below 0.30. It is absolute, so it does not change with the filter. Hover or click
-                    a bar for the raw cosine score and full details.
+                    Skills that are Hot Tech for at least one occupation. Each bar is the raw AI
+                    score, the model's own measurement, from 0 to 0.7. An AI Skill needs a raw
+                    score of {{ "%.2f"|format(data.summary.ai_threshold) }} or more <em>and</em> an
+                    AI-engineering signal; AI Enabling and Below AI threshold are decided by other
+                    signals, so only the AI Skill line is drawn. A ◇ marks a skill whose class was
+                    decided within 0.03 of its line: the call could change with a small change in
+                    the score. The rescaled display score is in the tooltip.
                 </p>
 
                 <div class="filters">
@@ -144,8 +154,8 @@
                     <div class="field">
                         <label for="ranked-sort">Sort</label>
                         <select id="ranked-sort">
-                            <option value="desc" selected>AI relevance, high to low</option>
-                            <option value="asc">AI relevance, low to high</option>
+                            <option value="desc" selected>Raw AI score, high to low</option>
+                            <option value="asc">Raw AI score, low to high</option>
                         </select>
                     </div>
                     <div class="field">
@@ -161,6 +171,7 @@
                     keyboard navigation.
                 -->
                 <p class="panel__note" id="ranked-count" aria-live="polite"></p>
+                <p class="panel__note" id="ranked-unchecked"></p>
                 <div class="panel__body">
                     <div class="scrollbox">
                         <ul class="bars" id="ranked-bars"></ul>
